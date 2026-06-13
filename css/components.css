@@ -409,3 +409,38 @@
 .rec-last.know { color: var(--green-strong); background: var(--green-tint); }
 .rec-last.review { color: var(--clay); background: var(--clay-tint); }
 .rec-meta { font-family: var(--font-mono); font-size: 12px; color: var(--ink-faint); margin-top: 6px; }
+
+/* ===== 正式口試 ===== */
+.exam-intro, .exam-closing { max-width: 520px; }
+.exam-greet { font-size: 22px; font-weight: 600; line-height: 1.6; margin: 8px 0 16px; }
+.exam-run .qcard-title { font-size: 22px; line-height: 1.5; }
+.exam-cue { font-size: 13px; color: var(--ink-faint); margin: 0 0 14px; }
+.exam-actions { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.ex-reveal-btn.is-done { opacity: 0.5; }
+.exam-followup { background: var(--slate-tint); border-radius: 12px; padding: 12px 14px; margin: 14px 0; }
+.exam-followup .facet-label { color: var(--slate); }
+.exam-followup-q { margin: 6px 0 0; font-size: 16px; line-height: 1.6; }
+.exam-rate { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 18px; }
+.exam-rate-btn { min-height: var(--tap); border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); }
+.exam-rate-btn.know.is-chosen { color: #fff; background: var(--brand); border-color: var(--brand); }
+.exam-rate-btn.review.is-chosen { color: var(--clay); background: var(--clay-tint); border-color: var(--clay); }
+
+/* 口試總結 */
+.exam-saved { font-size: 13px; color: var(--ink-faint); margin: 4px 0 0; }
+.exam-list { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.exam-li { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.exam-li-n { flex: none; font-family: var(--font-mono); font-size: 13px; color: var(--ink-faint); }
+.exam-li-title { flex: 1; font-size: 14px; line-height: 1.5; }
+.exam-supp { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.7; color: var(--ink-soft); margin: 0 0 18px; white-space: pre-wrap; }
+.exam-summary .btn-ghost.btn-block { margin-top: 10px; }
+
+/* ===== 個人筆記頁 ===== */
+.page-title { font-size: 24px; font-weight: 700; margin: 6px 0 8px; }
+.page-sub { font-size: 13px; color: var(--ink-faint); line-height: 1.7; margin: 0 0 18px; }
+.notes-ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.note-card { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--dc, var(--brand)); border-radius: 12px; }
+.note-card > a { display: block; padding: 14px 16px; text-decoration: none; color: inherit; }
+.note-card-id { display: inline-block; font-family: var(--font-mono); font-size: 12px; color: var(--ink-faint); margin-bottom: 4px; }
+.note-card-title { display: block; font-size: 16px; font-weight: 600; line-height: 1.5; margin-bottom: 6px; }
+.note-card-snippet { display: block; font-size: 13px; color: var(--ink-soft); line-height: 1.7; white-space: pre-wrap; }
+.settings-view .note-status { display: block; margin-top: 12px; color: var(--brand); font-size: 14px; }

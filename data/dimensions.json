@@ -20,16 +20,16 @@
       "desc": "傳染病通報、分類與防治"
     },
     {
-      "id": "mental",
-      "label": "心理健康",
-      "color": "#5C5A7A",
-      "desc": "學生心理支持與危機處理"
-    },
-    {
       "id": "parent",
       "label": "家長溝通",
       "color": "#2C7A6B",
       "desc": "親師溝通與衝突處理"
+    },
+    {
+      "id": "mental",
+      "label": "心理健康",
+      "color": "#5C5A7A",
+      "desc": "學生心理支持與危機處理"
     },
     {
       "id": "promotion",

@@ -2,7 +2,7 @@
 // 載入題庫與能力面向定義。App 永不寫回這些 JSON。
 // 新增題目分類檔時，在 QUESTION_FILES 加入檔名即可。
 
-const QUESTION_FILES = ['self', 'emergency', 'infectious', 'mental'];
+const QUESTION_FILES = ['self', 'emergency', 'infectious', 'parent', 'mental', 'promotion', 'admin'];
 
 let _cache = null;
 

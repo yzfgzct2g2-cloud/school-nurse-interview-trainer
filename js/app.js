@@ -7,7 +7,10 @@ import { renderSetup } from './features/setup.js';
 import { renderHome } from './features/home.js';
 import { renderKnowledgeList, renderQuestion } from './features/knowledge.js';
 import { renderPractice } from './features/practice.js';
+import { renderExam } from './features/exam.js';
 import { renderCram } from './features/cram.js';
+import { renderNotes } from './features/notes.js';
+import { renderSettings } from './features/settings.js';
 import { renderRecords } from './features/records.js';
 import { renderPlaceholder } from './features/placeholder.js';
 
@@ -49,7 +52,10 @@ function route() {
       return renderQuestion(outlet, { content, id: decodeURIComponent(parts.slice(1).join('/')) });
     }
     if (parts[0] === 'practice') return renderPractice(outlet, { content });
+    if (parts[0] === 'exam') return renderExam(outlet, { content });
     if (parts[0] === 'cram') return renderCram(outlet, { content });
+    if (parts[0] === 'notes') return renderNotes(outlet, { content });
+    if (parts[0] === 'settings') return renderSettings(outlet, { content });
     if (parts[0] === 'records') return renderRecords(outlet, { content });
     if (parts[0] === 'soon') return renderPlaceholder(outlet, { key: parts[1] });
     return renderHome(outlet, { content });

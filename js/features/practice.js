@@ -115,12 +115,30 @@ function renderRun(outlet, content) {
 }
 
 function revealAnswer(outlet, content, q) {
+  const fu = q.followups || [];
+  const followBlock = fu.length
+    ? `<section class="facet facet--followup">
+         <div class="facet-head"><span class="facet-label">追問</span><span class="facet-tag">${fu.length} 題</span></div>
+         <button class="btn-ghost btn-block" id="p-show-fu" type="button">查看追問</button>
+         <ul class="followup-list" id="p-fu-list" hidden>${fu.map((f) => `<li class="followup-item"><span class="followup-q">${esc(f.question)}</span></li>`).join('')}</ul>
+       </section>`
+    : '';
+
   outlet.querySelector('#p-reveal').innerHTML = `
     ${facet('30 秒回答', 'quick', `<p class="facet-body">${esc(q.quickAnswer)}</p>`)}
     ${facet('一句記憶', 'hook', `<p class="facet-hook">${esc(q.memoryHook)}</p>`)}
     ${listFacet('加分重點', 'bonus', q.bonusPoints)}
     ${listFacet('容易失分', 'mistake', q.commonMistakes)}
-    <a class="p-original-link" href="#/q/${encodeURIComponent(q.id)}">看完整原始資料與追問 ›</a>`;
+    ${followBlock}
+    <a class="p-original-link" href="#/q/${encodeURIComponent(q.id)}">看完整原始資料 ›</a>`;
+
+  const showFu = outlet.querySelector('#p-show-fu');
+  if (showFu) {
+    showFu.addEventListener('click', () => {
+      outlet.querySelector('#p-fu-list').hidden = false;
+      showFu.hidden = true;
+    });
+  }
 
   const actions = outlet.querySelector('#p-actions');
   actions.innerHTML = `

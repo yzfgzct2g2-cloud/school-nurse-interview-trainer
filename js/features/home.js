@@ -20,15 +20,17 @@ export function renderHome(outlet, { content } = {}) {
     </header>
 
     <div class="actions-primary">
-      ${actionCard('正式口試', '完整模擬：自我介紹、委員提問、追問、評分', '#/soon/exam', 'Sprint 3')}
-      ${actionCard('單題練習', '看題自答、看解答、自評、存進度', '#/practice', '')}
+      ${actionCard('正式口試', '開場自我介紹 → 抽 6 題 → 追問 → 總結', '#/exam', '')}
+      ${actionCard('單題練習', '看題自答、看解答、看追問、自評存進度', '#/practice', '')}
     </div>
 
     <nav class="grid-secondary" aria-label="功能">
       ${miniCard('知識庫', '瀏覽全部題目與正本', '#/knowledge')}
-      ${miniCard('我的收藏', '標記的題目', '#/knowledge?fav=1')}
-      ${miniCard('成績紀錄', '歷次練習與成長', '#/records')}
       ${miniCard('考前 5 分鐘', '一句記憶快閃複習', '#/cram')}
+      ${miniCard('我的收藏', '標記的題目', '#/knowledge?fav=1')}
+      ${miniCard('個人筆記', '你寫過的所有筆記', '#/notes')}
+      ${miniCard('成績紀錄', '歷次練習與成長', '#/records')}
+      ${miniCard('設定', '修改口試稱呼與姓名', '#/settings')}
     </nav>
 
     <section class="recent">

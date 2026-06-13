@@ -1,5 +1,5 @@
 /* sw.js — 離線快取（cache-first） */
-const CACHE = 'snit-v3';
+const CACHE = 'snit-v6';
 
 const ASSETS = [
   '.',
@@ -17,7 +17,10 @@ const ASSETS = [
   'js/features/home.js',
   'js/features/knowledge.js',
   'js/features/practice.js',
+  'js/features/exam.js',
   'js/features/cram.js',
+  'js/features/notes.js',
+  'js/features/settings.js',
   'js/features/records.js',
   'js/features/setup.js',
   'js/features/placeholder.js',
@@ -29,7 +32,10 @@ const ASSETS = [
   'data/questions/self.json',
   'data/questions/emergency.json',
   'data/questions/infectious.json',
+  'data/questions/parent.json',
   'data/questions/mental.json',
+  'data/questions/promotion.json',
+  'data/questions/admin.json',
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',
   'assets/icons/icon-180.png',
