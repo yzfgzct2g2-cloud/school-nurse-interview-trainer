@@ -1,0 +1,60 @@
+/* tokens.css — 設計變數
+   --brand / --brand-strong：填色按鈕與卡片用，淺色深色主題皆固定（白字才永遠夠對比）
+   --green / --green-strong：文字與線條用的「適應色」，深色主題會轉亮 */
+:root {
+  --paper: #F1F4ED;
+  --surface: #FBFCF8;
+  --surface-2: #ECF0E7;
+  --ink: #232a22;
+  --ink-soft: #54624f;
+  --ink-faint: #828e7d;
+  --line: rgba(40, 60, 45, 0.13);
+  --line-strong: rgba(40, 60, 45, 0.22);
+
+  --brand: #2C5A47;
+  --brand-strong: #1d4233;
+  --green: #2C5A47;
+  --green-strong: #1d4233;
+  --green-tint: #E4ECE3;
+
+  --clay: #A9621F;
+  --clay-tint: #F1E3D2;
+  --brick: #A1382B;
+  --brick-tint: #F0DEDA;
+  --slate: #3A5C71;
+  --slate-tint: #DDE6EB;
+
+  --radius: 14px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --shadow: 0 1px 2px rgba(30, 45, 30, 0.05), 0 6px 16px rgba(30, 45, 30, 0.06);
+  --tap: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141711;
+    --surface: #1b2018;
+    --surface-2: #222820;
+    --ink: #e8ece3;
+    --ink-soft: #a6b1a0;
+    --ink-faint: #7c897a;
+    --line: rgba(220, 230, 210, 0.12);
+    --line-strong: rgba(220, 230, 210, 0.20);
+
+    --brand: #2C5A47;
+    --brand-strong: #23493a;
+    --green: #74b394;
+    --green-strong: #93c6ac;
+    --green-tint: #22302a;
+
+    --clay: #cf9a5e;
+    --clay-tint: #322619;
+    --brick: #d77f70;
+    --brick-tint: #33201d;
+    --slate: #86a8bf;
+    --slate-tint: #1d2a31;
+
+    --shadow: none;
+  }
+}

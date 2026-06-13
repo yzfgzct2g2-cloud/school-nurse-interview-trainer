@@ -1,0 +1,17 @@
+{
+  "name": "校護口試訓練平台",
+  "short_name": "校護口試",
+  "description": "校護甄試口試訓練：知識庫、搜尋、單題練習與模擬口試",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F1F4ED",
+  "theme_color": "#2C5A47",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

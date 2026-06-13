@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "dimensions": [
+    {
+      "id": "self",
+      "label": "自我介紹",
+      "color": "#5B6F95",
+      "desc": "報考動機、個人特質與職涯經驗"
+    },
+    {
+      "id": "emergency",
+      "label": "緊急傷病",
+      "color": "#B23A2E",
+      "desc": "急救處置與校園緊急應變"
+    },
+    {
+      "id": "infectious",
+      "label": "傳染病",
+      "color": "#BE7A35",
+      "desc": "傳染病通報、分類與防治"
+    },
+    {
+      "id": "mental",
+      "label": "心理健康",
+      "color": "#5C5A7A",
+      "desc": "學生心理支持與危機處理"
+    },
+    {
+      "id": "parent",
+      "label": "家長溝通",
+      "color": "#2C7A6B",
+      "desc": "親師溝通與衝突處理"
+    },
+    {
+      "id": "promotion",
+      "label": "健康促進",
+      "color": "#4E7A3A",
+      "desc": "健康促進方案與衛教"
+    },
+    {
+      "id": "admin",
+      "label": "行政管理",
+      "color": "#3E6075",
+      "desc": "保健室行政、法規與紀錄"
+    }
+  ]
+}
