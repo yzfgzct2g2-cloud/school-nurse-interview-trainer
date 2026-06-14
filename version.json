@@ -1,10 +1,11 @@
 {
-  "version": "v1.3.0",
-  "build": "20260614-OralExam",
-  "sprint": "正式口試模式",
+  "version": "v1.4.0",
+  "build": "20260614-ai-voice-v1",
+  "sprint": "AI Voice Interview v1",
   "releaseNote": [
-    "新增首頁版本顯示",
-    "修正預設稱呼為王小姐",
-    "完成正式口試模式"
+    "正式口試加入瀏覽器朗讀題目",
+    "正式口試加入錄音功能",
+    "錄音保存至 IndexedDB",
+    "成績紀錄顯示正式口試錄音狀態"
   ]
 }

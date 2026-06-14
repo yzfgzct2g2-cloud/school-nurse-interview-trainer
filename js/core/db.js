@@ -89,6 +89,13 @@ export async function getRecording(key) {
   return rec ? rec.blob : null;
 }
 
+// 正式口試錄音：保存含 metadata 的完整錄音記錄（key 由 genId 產生，append-only 不覆蓋既有）。
+export async function saveRecordingFull(rec) {
+  const s = await store('recordings', 'readwrite');
+  await reqAsPromise(s.put(rec)); // rec 須含 key 屬性
+  return rec.key;
+}
+
 // --- 備份匯出（Sprint 2 會擴充為含錄音的完整匯出）---
 export async function exportAttempts() {
   const attempts = await getAllAttempts();

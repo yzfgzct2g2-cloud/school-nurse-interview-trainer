@@ -1,15 +1,19 @@
-// features/exam.js — 正式口試模式（v1.3.0）
-// 流程：開場 → 自我介紹題(固定 SELF-001) → 依序抽 EMG/INF/PARENT/MENT/ADMIN 各 1 題（該類無題則從全部補齊）
-//        每題：顯示題目 → 考生口頭回答 → 按「我回答完了」→ 一次展開：30秒回答／完整原始資料／委員真正想看／
-//              加分重點／容易失分／追問(followups[0]，無則提示) → 標記 會了/再練 → 下一題
-//        最後補充 → 結束頁。每題以 addAttempt(mode:'exam') 存入既有 IndexedDB attempts。
-// 不含：AI、Whisper、語音辨識、雷達圖等。
+// features/exam.js — 正式口試模式（v1.4.0：AI Voice Interview v1）
+// 流程：開場 → 自我介紹題(固定 SELF-001) → 依序 EMG/INF/PARENT/MENT/ADMIN 各 1 題（該類無題則從全部補齊）
+//        每題：朗讀題目(TTS) → 開始錄音 → 口頭回答 → 我回答完了(停止錄音、保存) →
+//              依序展開 委員真正想看／30秒回答／完整回答／加分重點／容易失分／第一二三追問(並朗讀第一追問) →
+//              標記 會了/再練 → 下一題
+//        最後補充 → 結束頁。
+// 語音：瀏覽器內建 SpeechSynthesis（朗讀）、MediaRecorder（錄音）；皆有不支援時的優雅退場，不阻擋口試。
+// 不含：AI 評分、Whisper、OpenAI、語音辨識、逐字稿、雷達圖等。
 import { getProfile } from '../core/settings.js';
 import { dimMeta } from '../core/content.js';
-import { addAttempt, genId } from '../core/db.js';
+import { addAttempt, genId, saveRecordingFull } from '../core/db.js';
 import { esc, appBar } from '../core/dom.js';
+import { speak, cancel as cancelTTS, isSupported as ttsSupported } from '../speech/tts.js';
+import { recorderSupported, startRecording } from '../speech/recorder.js';
 
-let exam = null; // { questions:[], idx, ratings:{id:rating}, supplement }
+let exam = null; // { questions:[], idx, ratings, supplement, curAttemptId, curHasRecording, recorder }
 
 function salutation() {
   return (getProfile() || {}).salutation || '王小姐';
@@ -23,8 +27,7 @@ function shuffle(a) {
   return a;
 }
 
-// 自我介紹題固定 SELF-001；其後依序 EMG→INF→PARENT(PAR)→MENT→ADMIN(ADM) 各 1 題。
-// 某分類沒有題目時，從全部題庫補齊、不重複。
+// 自我介紹題固定 SELF-001；其後依序 EMG→INF→PARENT(PAR)→MENT→ADMIN(ADM) 各 1 題。某類無題則從全部補齊。
 function pickExamQuestions(content) {
   const cat = (q) => (q.id.split('-')[0] || '').toUpperCase();
   const inCat = (c) => content.questions.filter((q) => cat(q) === c);
@@ -34,15 +37,13 @@ function pickExamQuestions(content) {
     if (av[0]) { used.add(av[0].id); return [av[0]]; }
     return [];
   };
-
   let chosen = [];
   const self001 = (content.byId && content.byId['SELF-001']) || null;
   if (self001) { chosen.push(self001); used.add(self001.id); }
   else chosen = chosen.concat(takeOne(inCat('SELF')));
-
   for (const c of ['EMG', 'INF', 'PAR', 'MENT', 'ADM']) {
     let one = takeOne(inCat(c));
-    if (!one.length) one = takeOne(content.questions); // 該類無題則從全部補齊
+    if (!one.length) one = takeOne(content.questions);
     chosen = chosen.concat(one);
   }
   return chosen;
@@ -55,7 +56,6 @@ function chips(content, q) {
   }).join('');
 }
 
-// 與知識庫一致的面向卡片
 function facet(label, tag, mod, bodyHtml) {
   return `<section class="facet facet--${mod}">
     <div class="facet-head"><span class="facet-label">${esc(label)}</span>${tag ? `<span class="facet-tag">${esc(tag)}</span>` : ''}</div>
@@ -70,28 +70,69 @@ function facetList(label, mod, arr) {
   </section>`;
 }
 
+// 停止目前錄音並保存到 IndexedDB（與本題 attemptId 連結）。失敗不阻擋流程。
+async function stopAndSaveRecording(q, statusEl) {
+  if (!exam.recorder) return;
+  const rec = exam.recorder;
+  exam.recorder = null;
+  try {
+    const { blob, mimeType, durationSec } = await rec.stop();
+    if (blob && blob.size) {
+      const recordingId = genId();
+      await saveRecordingFull({
+        key: recordingId,
+        recordingId,
+        attemptId: exam.curAttemptId,
+        questionId: q.id,
+        mode: 'exam',
+        createdAt: new Date().toISOString(),
+        audioBlob: blob,
+        blob, // 同時放在 blob 鍵，相容既有 getRecording()
+        mimeType,
+        durationSec,
+      });
+      exam.curHasRecording = true;
+      if (statusEl) statusEl.textContent = `已保存錄音（約 ${durationSec} 秒）`;
+    } else if (statusEl) {
+      statusEl.textContent = '錄音內容為空，未保存。';
+    }
+  } catch (e) {
+    console.warn('錄音保存失敗', e);
+    if (statusEl) statusEl.textContent = '錄音保存失敗，仍可繼續口試。';
+  }
+}
+
 export function renderExam(outlet, { content } = {}) {
-  exam = { questions: pickExamQuestions(content), idx: 0, ratings: {}, supplement: '' };
+  exam = { questions: pickExamQuestions(content), idx: 0, ratings: {}, supplement: '', curAttemptId: null, curHasRecording: false, recorder: null };
   renderIntro(outlet, content);
 }
 
-// 第一階段：開場
+// 第一階段：開場（朗讀開場文字）
 function renderIntro(outlet, content) {
   const salu = salutation();
+  const openText = `${salu}您好。歡迎參加本次校護甄試。請先進行一分鐘自我介紹。`;
   outlet.innerHTML = `${appBar('正式口試')}
     <section class="view exam-intro">
       <p class="eyebrow">正式口試・開場</p>
       <h1 class="exam-greet">${esc(salu)}您好。<br>歡迎參加本次校護甄試。<br>請先進行一分鐘自我介紹。</h1>
+      ${ttsSupported() ? `<button class="btn-ghost btn-block" id="ex-tts" type="button">🔊 重新朗讀開場</button>` : ''}
       <button class="btn-primary btn-block" id="ex-start" type="button">開始口試</button>
     </section>`;
 
+  if (ttsSupported()) {
+    speak(openText); // 桌機可自動朗讀；iPhone 可能需按「重新朗讀」（需使用者手勢）
+    const t = outlet.querySelector('#ex-tts');
+    if (t) t.addEventListener('click', () => speak(openText));
+  }
+
   outlet.querySelector('#ex-start').addEventListener('click', () => {
+    cancelTTS();
     exam.idx = 0;
     renderQuestion(outlet, content);
   });
 }
 
-// 第二、三階段：題目（含自我介紹題 SELF-001 與抽題）
+// 第二、三階段：題目（朗讀題目 + 錄音 + 我回答完了 + 展開解答 + 標記 + 下一題）
 function renderQuestion(outlet, content) {
   const q = exam.questions[exam.idx];
   const total = exam.questions.length;
@@ -99,6 +140,13 @@ function renderQuestion(outlet, content) {
   const spine = dimMeta(content, (q.dimensions || [])[0]).color;
   const chosen = exam.ratings[q.id] || '';
   const stageTag = exam.idx === 0 ? '自我介紹題' : `第 ${exam.idx} 題`;
+
+  exam.curAttemptId = genId();
+  exam.curHasRecording = false;
+  exam.recorder = null;
+
+  const canRec = recorderSupported();
+  const canTTS = ttsSupported();
 
   outlet.innerHTML = `${appBar('正式口試')}
     <section class="view exam-run">
@@ -109,7 +157,17 @@ function renderQuestion(outlet, content) {
           <h1 class="qcard-title">${esc(q.title)}</h1>
         </header>
 
-        <p class="exam-cue" id="ex-cue">請先自行口頭回答這一題，回答完再展開參考解答。</p>
+        <p class="exam-cue" id="ex-cue">委員正在朗讀題目，請聽完後口頭回答；可先按「開始錄音」。</p>
+
+        <div class="exam-voice">
+          ${canTTS ? `<button class="btn-ghost exam-vbtn" id="ex-tts" type="button">🔊 重新朗讀題目</button>` : ''}
+          ${canRec
+            ? `<button class="btn-ghost exam-vbtn" id="ex-rec-start" type="button">● 開始錄音</button>
+               <button class="btn-ghost exam-vbtn" id="ex-rec-stop" type="button" hidden>■ 停止錄音</button>
+               <span class="exam-rec-status" id="ex-rec-status"></span>`
+            : `<p class="exam-rec-unsupported">此裝置暫不支援錄音，仍可進行口試練習。</p>`}
+        </div>
+
         <button class="btn-primary btn-block" id="ex-done" type="button">我回答完了</button>
 
         <div id="ex-answer" hidden></div>
@@ -125,6 +183,41 @@ function renderQuestion(outlet, content) {
       </article>
     </section>`;
 
+  const statusEl = outlet.querySelector('#ex-rec-status');
+
+  // 朗讀題目（每關開始自動朗讀；提供「重新朗讀」）
+  if (canTTS) {
+    speak(q.title);
+    const t = outlet.querySelector('#ex-tts');
+    if (t) t.addEventListener('click', () => speak(q.title));
+  }
+
+  // 錄音
+  if (canRec) {
+    const startBtn = outlet.querySelector('#ex-rec-start');
+    const stopBtn = outlet.querySelector('#ex-rec-stop');
+    startBtn.addEventListener('click', async () => {
+      statusEl.textContent = '準備中…';
+      try {
+        exam.recorder = await startRecording();
+        startBtn.hidden = true;
+        stopBtn.hidden = false;
+        statusEl.textContent = '🔴 錄音中…';
+      } catch (e) {
+        console.warn('無法開始錄音', e);
+        exam.recorder = null;
+        startBtn.hidden = false;
+        stopBtn.hidden = true;
+        statusEl.textContent = '無法取得麥克風權限，仍可繼續口試。';
+      }
+    });
+    stopBtn.addEventListener('click', async () => {
+      stopBtn.hidden = true;
+      startBtn.hidden = false;
+      await stopAndSaveRecording(q, statusEl);
+    });
+  }
+
   const fus = (q.followups || []).filter((f) => f && f.question);
   const followupSections = fus.length
     ? fus.slice(0, 3).map((f, i) =>
@@ -132,8 +225,13 @@ function renderQuestion(outlet, content) {
       ).join('')
     : facet('追問', '', 'followup', '<p class="facet-body muted">本題暫無延伸追問。</p>');
 
-  // 「我回答完了」→ 一次依序展開全部解答（委員真正想看 → 30秒 → 完整 → 加分 → 失分 → 三個追問）
-  outlet.querySelector('#ex-done').addEventListener('click', () => {
+  // 我回答完了：停止並保存錄音 → 展開解答 → 朗讀第一追問
+  outlet.querySelector('#ex-done').addEventListener('click', async () => {
+    cancelTTS();
+    if (exam.recorder) {
+      if (statusEl) statusEl.textContent = '儲存錄音中…';
+      await stopAndSaveRecording(q, statusEl);
+    }
     const box = outlet.querySelector('#ex-answer');
     box.innerHTML =
       facet('委員真正想看', '', 'want', `<p class="facet-body">${esc(q.examinerWants)}</p>`) +
@@ -151,6 +249,8 @@ function renderQuestion(outlet, content) {
     outlet.querySelector('#ex-done').hidden = true;
     outlet.querySelector('#ex-cue').hidden = true;
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 朗讀第一追問
+    if (canTTS && fus[0]) speak(fus[0].question);
   });
 
   // 會了 / 再練（單選）
@@ -163,16 +263,19 @@ function renderQuestion(outlet, content) {
     b.classList.add('is-chosen');
   });
 
-  // 下一題：存一筆 attempt（mode:'exam'）後前進
+  // 下一題：以本題 attemptId 存一筆 attempt（mode:'exam'、hasRecording）後前進
   outlet.querySelector('#ex-next').addEventListener('click', () => {
-    const rating = exam.ratings[q.id] || 'review'; // 未評者預設「再練」
+    cancelTTS();
+    if (exam.recorder) { try { exam.recorder.cancel(); } catch (_) {} exam.recorder = null; }
+    const rating = exam.ratings[q.id] || 'review';
     exam.ratings[q.id] = rating;
     addAttempt({
-      attemptId: genId(),
+      attemptId: exam.curAttemptId,
       questionId: q.id,
       mode: 'exam',
       selfRating: rating,
       createdAt: new Date().toISOString(),
+      hasRecording: !!exam.curHasRecording,
     }).catch((err) => console.warn('口試紀錄儲存失敗', err));
 
     exam.idx += 1;
@@ -183,6 +286,8 @@ function renderQuestion(outlet, content) {
 
 // 第四階段：最後補充
 function renderClosing(outlet, content) {
+  cancelTTS();
+  if (exam.recorder) { try { exam.recorder.cancel(); } catch (_) {} exam.recorder = null; }
   const salu = salutation();
   outlet.innerHTML = `${appBar('正式口試・最後補充')}
     <section class="view exam-closing">
@@ -213,7 +318,6 @@ function renderSummary(outlet, content) {
       <span class="rec-last ${r}">${label}</span>
     </li>`;
   };
-
   const simpleList = (arr) => arr.length
     ? `<ul class="exam-list">${arr.map((q) => `<li class="exam-li"><span class="exam-li-title">${esc(q.title)}</span></li>`).join('')}</ul>`
     : '<p class="empty">（無）</p>';

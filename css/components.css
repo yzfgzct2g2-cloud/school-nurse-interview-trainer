@@ -450,3 +450,12 @@
 .home-version .hv-name { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
 .home-version .hv-ver { font-size: 15px; color: var(--brand); font-weight: 700; font-family: var(--font-mono, monospace); }
 .home-version .hv-build { font-size: 11px; color: var(--ink-faint); font-family: var(--font-mono, monospace); }
+
+/* ===== 正式口試：語音/錄音控制 (v1.4.0) ===== */
+.exam-voice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0; }
+.exam-vbtn { flex: 0 0 auto; }
+.exam-rec-status { font-size: 13px; color: var(--ink-soft); }
+.exam-rec-unsupported { font-size: 13px; color: var(--ink-faint); margin: 4px 0; }
+.rec-tag { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.rec-tag.exam { background: rgba(62,96,117,0.14); color: var(--brand, #3E6075); }
+.rec-tag.rec { background: rgba(178,58,46,0.12); color: #B23A2E; }

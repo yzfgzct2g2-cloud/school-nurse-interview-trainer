@@ -46,8 +46,8 @@ export function renderHome(outlet, { content } = {}) {
 
     <footer class="home-version" id="home-version">
       <span class="hv-name">校護口試訓練平台</span>
-      <span class="hv-ver" id="hv-ver">v1.3.0</span>
-      <span class="hv-build" id="hv-build">Build 20260614-OralExam</span>
+      <span class="hv-ver" id="hv-ver">v1.4.0</span>
+      <span class="hv-build" id="hv-build">Build 20260614-ai-voice-v1</span>
     </footer>
   </section>`;
 

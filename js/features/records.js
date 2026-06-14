@@ -26,7 +26,9 @@ export function renderRecords(outlet, { content } = {}) {
       const last = list[0];
       const know = list.filter((a) => a.selfRating === 'know').length;
       const review = list.filter((a) => a.selfRating === 'review').length;
-      return { q, qid, count: list.length, know, review, last, d: dimMeta(content, (q.dimensions || [])[0]) };
+      const hasRec = list.some((a) => a.hasRecording);
+      const isExam = list.some((a) => a.mode === 'exam');
+      return { q, qid, count: list.length, know, review, last, hasRec, isExam, d: dimMeta(content, (q.dimensions || [])[0]) };
     }).filter(Boolean).sort((a, b) => (a.last.createdAt < b.last.createdAt ? 1 : -1));
 
     view.innerHTML = `
@@ -39,6 +41,8 @@ export function renderRecords(outlet, { content } = {}) {
         <li><a class="q-item" href="#/q/${encodeURIComponent(r.qid)}">
           <div class="q-item-chips">
             <span class="chip" style="--dc:${esc(r.d.color)}">${esc(r.d.label)}</span>
+            ${r.isExam ? '<span class="rec-tag exam">正式口試</span>' : ''}
+            ${r.hasRec ? '<span class="rec-tag rec">🎙 有錄音</span>' : ''}
             <span class="rec-last ${r.last.selfRating === 'know' ? 'know' : 'review'}">${r.last.selfRating === 'know' ? '會了' : '再練'}</span>
           </div>
           <div class="q-item-title">${esc(r.q.title)}</div>
