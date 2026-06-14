@@ -1,16 +1,19 @@
-// features/exam.js — 正式口試模式（凍結規格 V1.0）
-// 流程：開場（讀稱呼＋一分鐘自我介紹）→ 抽 6 題（固定順序 SELF→EMG→EMG→MENT→INF→ADM，不足從全部補齊）
-//        每題：顯示題目 → 考生口頭回答 → 按「我回答完了」→ 一次展開：30秒回答／完整回答／委員真正想看／
-//              加分重點／容易失分／追問(followups[0]) → 標記 會了/再練 → 下一題
-//        結尾：請問還有沒有需要補充 → 完成 → 總結
-// 每題以 addAttempt(mode:'exam') 存入 IndexedDB。
-// 不含：AI、Whisper、語音辨識、雷達圖。
+// features/exam.js — 正式口試模式（v1.3.0）
+// 流程：開場 → 自我介紹題(固定 SELF-001) → 依序抽 EMG/INF/PARENT/MENT/ADMIN 各 1 題（該類無題則從全部補齊）
+//        每題：顯示題目 → 考生口頭回答 → 按「我回答完了」→ 一次展開：30秒回答／完整原始資料／委員真正想看／
+//              加分重點／容易失分／追問(followups[0]，無則提示) → 標記 會了/再練 → 下一題
+//        最後補充 → 結束頁。每題以 addAttempt(mode:'exam') 存入既有 IndexedDB attempts。
+// 不含：AI、Whisper、語音辨識、雷達圖等。
 import { getProfile } from '../core/settings.js';
 import { dimMeta } from '../core/content.js';
 import { addAttempt, genId } from '../core/db.js';
 import { esc, appBar } from '../core/dom.js';
 
-let exam = null; // { questions:[6], idx, ratings:{id:rating}, intro, supplement }
+let exam = null; // { questions:[], idx, ratings:{id:rating}, supplement }
+
+function salutation() {
+  return (getProfile() || {}).salutation || '王小姐';
+}
 
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) {
@@ -20,22 +23,29 @@ function shuffle(a) {
   return a;
 }
 
-// 固定組成：SELF×1, EMG×2, MENT×1, INF×1, ADM×1（共 6 題，依此順序）；不足從全部題庫補齊、不重複。
-// 以題號前綴（題目類別／來源檔）為準，確保每一格剛好取自該類別。
+// 自我介紹題固定 SELF-001；其後依序 EMG→INF→PARENT(PAR)→MENT→ADMIN(ADM) 各 1 題。
+// 某分類沒有題目時，從全部題庫補齊、不重複。
 function pickExamQuestions(content) {
   const cat = (q) => (q.id.split('-')[0] || '').toUpperCase();
   const inCat = (c) => content.questions.filter((q) => cat(q) === c);
   const used = new Set();
-  const take = (pool, n) => {
-    const out = shuffle(pool.filter((q) => !used.has(q.id))).slice(0, n);
-    out.forEach((q) => used.add(q.id));
-    return out;
+  const takeOne = (pool) => {
+    const av = shuffle(pool.filter((q) => !used.has(q.id)));
+    if (av[0]) { used.add(av[0].id); return [av[0]]; }
+    return [];
   };
-  const plan = [['SELF', 1], ['EMG', 2], ['MENT', 1], ['INF', 1], ['ADM', 1]];
+
   let chosen = [];
-  for (const [c, n] of plan) chosen = chosen.concat(take(inCat(c), n));
-  if (chosen.length < 6) chosen = chosen.concat(take(content.questions, 6 - chosen.length));
-  return chosen.slice(0, 6);
+  const self001 = (content.byId && content.byId['SELF-001']) || null;
+  if (self001) { chosen.push(self001); used.add(self001.id); }
+  else chosen = chosen.concat(takeOne(inCat('SELF')));
+
+  for (const c of ['EMG', 'INF', 'PAR', 'MENT', 'ADM']) {
+    let one = takeOne(inCat(c));
+    if (!one.length) one = takeOne(content.questions); // 該類無題則從全部補齊
+    chosen = chosen.concat(one);
+  }
+  return chosen;
 }
 
 function chips(content, q) {
@@ -61,37 +71,38 @@ function facetList(label, mod, arr) {
 }
 
 export function renderExam(outlet, { content } = {}) {
-  exam = { questions: pickExamQuestions(content), idx: 0, ratings: {}, intro: '', supplement: '' };
+  exam = { questions: pickExamQuestions(content), idx: 0, ratings: {}, supplement: '' };
   renderIntro(outlet, content);
 }
 
+// 第一階段：開場
 function renderIntro(outlet, content) {
-  const salu = (getProfile() || {}).salutation || '老師';
+  const salu = salutation();
   outlet.innerHTML = `${appBar('正式口試')}
     <section class="view exam-intro">
       <p class="eyebrow">正式口試・開場</p>
-      <h1 class="exam-greet">${esc(salu)}您好，歡迎參加本次校護甄試，請先進行一分鐘自我介紹。</h1>
-      <textarea id="ex-intro" class="note-area" placeholder="可在這裡打草稿練習自我介紹，也可以直接略過（留白即可）"></textarea>
-      <button class="btn-primary btn-block" id="ex-start" type="button">開始口試（共 ${exam.questions.length} 題）</button>
+      <h1 class="exam-greet">${esc(salu)}您好。<br>歡迎參加本次校護甄試。<br>請先進行一分鐘自我介紹。</h1>
+      <button class="btn-primary btn-block" id="ex-start" type="button">開始口試</button>
     </section>`;
 
   outlet.querySelector('#ex-start').addEventListener('click', () => {
-    exam.intro = outlet.querySelector('#ex-intro').value;
     exam.idx = 0;
     renderQuestion(outlet, content);
   });
 }
 
+// 第二、三階段：題目（含自我介紹題 SELF-001 與抽題）
 function renderQuestion(outlet, content) {
   const q = exam.questions[exam.idx];
   const total = exam.questions.length;
   const last = exam.idx === total - 1;
   const spine = dimMeta(content, (q.dimensions || [])[0]).color;
   const chosen = exam.ratings[q.id] || '';
+  const stageTag = exam.idx === 0 ? '自我介紹題' : `第 ${exam.idx} 題`;
 
   outlet.innerHTML = `${appBar('正式口試')}
     <section class="view exam-run">
-      <div class="p-progress"><span class="p-count">第 ${exam.idx + 1} 題 / ${total}</span><div class="p-bar"><i style="width:${Math.round((exam.idx / total) * 100)}%"></i></div></div>
+      <div class="p-progress"><span class="p-count">${stageTag}（${exam.idx + 1} / ${total}）</span><div class="p-bar"><i style="width:${Math.round((exam.idx / total) * 100)}%"></i></div></div>
       <article class="qcard" style="--spine:${esc(spine)}">
         <header class="qcard-head">
           <div class="q-item-chips">${chips(content, q)}</div>
@@ -99,39 +110,42 @@ function renderQuestion(outlet, content) {
         </header>
 
         <p class="exam-cue" id="ex-cue">請先自行口頭回答這一題，回答完再展開參考解答。</p>
-        <button class="btn-primary btn-block" id="ex-done" type="button">我回答完了，展開解答</button>
+        <button class="btn-primary btn-block" id="ex-done" type="button">我回答完了</button>
 
         <div id="ex-answer" hidden></div>
 
         <div id="ex-after" hidden>
-          <p class="p-rate-label">自我評估這一題</p>
+          <p class="p-rate-label">標記這一題</p>
           <div class="exam-rate" id="ex-rate">
             <button class="exam-rate-btn know${chosen === 'know' ? ' is-chosen' : ''}" data-rate="know" type="button">✓ 會了</button>
             <button class="exam-rate-btn review${chosen === 'review' ? ' is-chosen' : ''}" data-rate="review" type="button">↻ 再練</button>
           </div>
-          <button class="btn-primary btn-block" id="ex-next" type="button">${last ? '進入結尾' : '下一題'}</button>
+          <button class="btn-primary btn-block" id="ex-next" type="button">${last ? '進入最後補充' : '下一題'}</button>
         </div>
       </article>
     </section>`;
 
-  const followupHtml = (q.followups && q.followups[0])
-    ? `<p class="facet-body">${esc(q.followups[0].question)}</p>`
-    : '<p class="facet-body muted">這題沒有預設追問。</p>';
+  const fus = (q.followups || []).filter((f) => f && f.question);
+  const followupSections = fus.length
+    ? fus.slice(0, 3).map((f, i) =>
+        facet(['第一追問', '第二追問', '第三追問'][i] || '追問', '', 'followup', `<p class="facet-body">${esc(f.question)}</p>`)
+      ).join('')
+    : facet('追問', '', 'followup', '<p class="facet-body muted">本題暫無延伸追問。</p>');
 
-  // 「我回答完了」→ 一次展開全部解答
+  // 「我回答完了」→ 一次依序展開全部解答（委員真正想看 → 30秒 → 完整 → 加分 → 失分 → 三個追問）
   outlet.querySelector('#ex-done').addEventListener('click', () => {
     const box = outlet.querySelector('#ex-answer');
     box.innerHTML =
+      facet('委員真正想看', '', 'want', `<p class="facet-body">${esc(q.examinerWants)}</p>`) +
       facet('30 秒回答', '30 秒', 'quick', `<p class="facet-body">${esc(q.quickAnswer)}</p>`) +
       `<section class="original">
         <span class="original-seal">正本・永久保存</span>
         <h2 class="original-title">完整回答</h2>
         <p class="original-body">${esc(q.original)}</p>
       </section>` +
-      facet('委員真正想看', '', 'want', `<p class="facet-body">${esc(q.examinerWants)}</p>`) +
       facetList('加分重點', 'bonus', q.bonusPoints) +
       facetList('容易失分', 'mistake', q.commonMistakes) +
-      facet('委員追問', '', 'followup', followupHtml);
+      followupSections;
     box.hidden = false;
     outlet.querySelector('#ex-after').hidden = false;
     outlet.querySelector('#ex-done').hidden = true;
@@ -167,13 +181,15 @@ function renderQuestion(outlet, content) {
   });
 }
 
+// 第四階段：最後補充
 function renderClosing(outlet, content) {
-  outlet.innerHTML = `${appBar('正式口試・結尾')}
+  const salu = salutation();
+  outlet.innerHTML = `${appBar('正式口試・最後補充')}
     <section class="view exam-closing">
-      <p class="eyebrow">正式口試・結尾</p>
-      <h1 class="exam-greet">今天的口試到這裡，請問還有沒有需要補充的內容？</h1>
-      <textarea id="ex-supp" class="note-area" placeholder="可在這裡補充想說的話，或直接完成"></textarea>
-      <button class="btn-primary btn-block" id="ex-finish" type="button">完成並看總結</button>
+      <p class="eyebrow">正式口試・最後補充</p>
+      <h1 class="exam-greet">${esc(salu)}，今天的口試問題到這裡。<br>請問還有沒有需要補充的內容？</h1>
+      <textarea id="ex-supp" class="note-area" placeholder="可在這裡補充想說的話，或直接完成口試"></textarea>
+      <button class="btn-primary btn-block" id="ex-finish" type="button">完成口試</button>
     </section>`;
 
   outlet.querySelector('#ex-finish').addEventListener('click', () => {
@@ -182,12 +198,13 @@ function renderClosing(outlet, content) {
   });
 }
 
+// 第五階段：結束頁
 function renderSummary(outlet, content) {
   const total = exam.questions.length;
-  const know = exam.questions.filter((q) => exam.ratings[q.id] === 'know').length;
-  const review = total - know;
+  const knowQs = exam.questions.filter((q) => exam.ratings[q.id] === 'know');
+  const reviewQs = exam.questions.filter((q) => exam.ratings[q.id] !== 'know');
 
-  const list = exam.questions.map((q, i) => {
+  const listItem = (q, i) => {
     const r = exam.ratings[q.id] === 'know' ? 'know' : 'review';
     const label = r === 'know' ? '會了' : '再練';
     return `<li class="exam-li">
@@ -195,28 +212,39 @@ function renderSummary(outlet, content) {
       <span class="exam-li-title">${esc(q.title)}</span>
       <span class="rec-last ${r}">${label}</span>
     </li>`;
-  }).join('');
+  };
+
+  const simpleList = (arr) => arr.length
+    ? `<ul class="exam-list">${arr.map((q) => `<li class="exam-li"><span class="exam-li-title">${esc(q.title)}</span></li>`).join('')}</ul>`
+    : '<p class="empty">（無）</p>';
 
   const supp = (exam.supplement || '').trim();
 
   outlet.innerHTML = `${appBar('口試完成')}
     <section class="view exam-summary">
       <div class="ps-card">
-        <span class="action-tag ps-tag">本次正式口試</span>
+        <span class="action-tag ps-tag">本次正式口試完成</span>
         <h1 class="ps-big">${total} 題完成</h1>
         <div class="ps-stats">
-          <div class="ps-stat"><span class="ps-n know">${know}</span>會了</div>
-          <div class="ps-stat"><span class="ps-n review">${review}</span>再練</div>
+          <div class="ps-stat"><span class="ps-n know">${knowQs.length}</span>會了</div>
+          <div class="ps-stat"><span class="ps-n review">${reviewQs.length}</span>再練</div>
         </div>
         <p class="exam-saved">已存入成績紀錄 ${total} 筆</p>
       </div>
 
-      <h2 class="section-title">本次題目</h2>
-      <ul class="exam-list">${list}</ul>
+      <h2 class="section-title">本次題目清單</h2>
+      <ul class="exam-list">${exam.questions.map(listItem).join('')}</ul>
 
-      ${supp ? `<h2 class="section-title">你的補充</h2><p class="exam-supp">${esc(supp)}</p>` : ''}
+      <h2 class="section-title">會了題目</h2>
+      ${simpleList(knowQs)}
 
-      <a class="btn-primary btn-block" href="#/records">查看成績</a>
+      <h2 class="section-title">再練題目</h2>
+      ${simpleList(reviewQs)}
+
+      <h2 class="section-title">最後補充內容</h2>
+      ${supp ? `<p class="exam-supp">${esc(supp)}</p>` : '<p class="empty">（無）</p>'}
+
       <a class="btn-ghost btn-block" href="#/">返回首頁</a>
+      <a class="btn-primary btn-block" href="#/records">查看成績紀錄</a>
     </section>`;
 }

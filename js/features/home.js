@@ -3,7 +3,7 @@ import { getProfile, getRecent } from '../core/settings.js';
 import { esc, IC } from '../core/dom.js';
 
 export function renderHome(outlet, { content } = {}) {
-  const profile = getProfile() || { salutation: '老師' };
+  const profile = getProfile() || { salutation: '王小姐' };
   const recent = getRecent().map((id) => content.byId[id]).filter(Boolean);
 
   outlet.innerHTML = `
@@ -43,6 +43,12 @@ export function renderHome(outlet, { content } = {}) {
         </a></li>`).join('')}</ul>`
         : `<p class="empty">還沒有閱讀紀錄。從知識庫挑一題開始吧。</p>`}
     </section>
+
+    <footer class="home-version" id="home-version">
+      <span class="hv-name">校護口試訓練平台</span>
+      <span class="hv-ver" id="hv-ver">v1.3.0</span>
+      <span class="hv-build" id="hv-build">Build 20260614-OralExam</span>
+    </footer>
   </section>`;
 
   const form = outlet.querySelector('#home-search');
@@ -51,6 +57,18 @@ export function renderHome(outlet, { content } = {}) {
     const q = form.q.value.trim();
     location.hash = q ? `#/knowledge?q=${encodeURIComponent(q)}` : '#/knowledge';
   });
+
+  // 版本顯示：嘗試讀取 version.json 更新內容；失敗時保留預設 v1.3.0（已寫死在 HTML）。
+  fetch('version.json', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v) => {
+      if (!v) return;
+      const verEl = outlet.querySelector('#hv-ver');
+      const buildEl = outlet.querySelector('#hv-build');
+      if (verEl && v.version) verEl.textContent = v.version;
+      if (buildEl && v.build) buildEl.textContent = `Build ${v.build}`;
+    })
+    .catch(() => { /* 載入失敗：保留預設 v1.3.0 */ });
 }
 
 function actionCard(title, desc, href, tag) {

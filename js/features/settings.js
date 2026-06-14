@@ -3,7 +3,7 @@
 import { getProfile, setProfile } from '../core/settings.js';
 import { esc, appBar } from '../core/dom.js';
 
-const PRESETS = ['房小姐', '房先生', '護理師', '老師'];
+const PRESETS = ['王小姐', '王先生', '護理師', '老師'];
 
 export function renderSettings(outlet) {
   const profile = getProfile() || { name: '', salutation: '老師' };

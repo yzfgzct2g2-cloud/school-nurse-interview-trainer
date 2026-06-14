@@ -1,10 +1,11 @@
 /* sw.js — 離線快取（cache-first） */
-const CACHE = 'snit-v6';
+const CACHE = 'snit-v7';
 
 const ASSETS = [
   '.',
   'index.html',
   'manifest.webmanifest',
+  'version.json',
   'css/tokens.css',
   'css/base.css',
   'css/components.css',

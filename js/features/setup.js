@@ -2,7 +2,7 @@
 import { setProfile } from '../core/settings.js';
 import { esc } from '../core/dom.js';
 
-const PRESETS = ['房小姐', '房先生', '護理師', '老師'];
+const PRESETS = ['王小姐', '王先生', '護理師', '老師'];
 
 export function renderSetup(outlet, { onDone } = {}) {
   outlet.innerHTML = `

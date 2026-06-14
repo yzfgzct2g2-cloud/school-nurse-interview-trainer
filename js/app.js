@@ -2,7 +2,7 @@
 import { loadContent } from './core/content.js';
 import { buildIndex } from './core/search.js';
 import { openDB } from './core/db.js';
-import { getProfile } from './core/settings.js';
+import { getProfile, setProfile, getUI, setUI } from './core/settings.js';
 import { renderSetup } from './features/setup.js';
 import { renderHome } from './features/home.js';
 import { renderKnowledgeList, renderQuestion } from './features/knowledge.js';
@@ -65,7 +65,17 @@ function route() {
   }
 }
 
+// v1.3.0：本次版本統一稱呼為「王小姐」，自動覆蓋 localStorage 內的舊稱呼（例如房先生）。
+// 僅執行一次（以 ui:saluMigration 旗標記錄），之後使用者仍可在「設定」自行修改並保留。
+function migrateSalutationV130() {
+  if (getUI('saluMigration', '') === 'v1.3.0') return;
+  const p = getProfile();
+  if (p) setProfile({ ...p, salutation: '王小姐' });
+  setUI('saluMigration', 'v1.3.0');
+}
+
 async function boot() {
+  migrateSalutationV130();
   openDB().catch((e) => console.warn('IndexedDB 初始化警告', e));
 
   try {
