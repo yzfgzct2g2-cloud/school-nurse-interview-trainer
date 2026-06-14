@@ -1,12 +1,12 @@
 {
-  "version": "v1.5.0",
-  "build": "20260614-stt-v1",
-  "sprint": "Speech To Text v1",
+  "version": "v1.6.0",
+  "build": "20260614-local-score-v1",
+  "sprint": "Local AI Scoring v1",
   "releaseNote": [
-    "正式口試加入逐字稿流程",
-    "支援瀏覽器語音辨識時自動產生逐字稿",
-    "不支援語音辨識時可手動輸入逐字稿",
-    "逐字稿保存至 IndexedDB",
-    "預留 Whisper API 介面但不暴露 API Key"
+    "正式口試加入本地規則式評分",
+    "依題庫關鍵字與加分重點計算分數",
+    "顯示命中重點與缺少重點",
+    "評分結果保存至 IndexedDB",
+    "成績紀錄顯示分數與等級"
   ]
 }

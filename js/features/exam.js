@@ -13,6 +13,7 @@ import { esc, appBar } from '../core/dom.js';
 import { speak, cancel as cancelTTS, isSupported as ttsSupported } from '../speech/tts.js';
 import { recorderSupported, startRecording } from '../speech/recorder.js';
 import { isSupported as sttSupported, startLiveTranscription } from '../speech/stt.js';
+import { scoreAnswer } from '../ai/localScorer.js';
 
 let exam = null;
 
@@ -98,7 +99,7 @@ async function stopLiveSTT() {
 export function renderExam(outlet, { content } = {}) {
   exam = {
     questions: pickExamQuestions(content), idx: 0, ratings: {}, supplement: '',
-    curAttemptId: null, curHasRecording: false, curTranscript: '',
+    curAttemptId: null, curHasRecording: false, curTranscript: '', curScore: null,
     recorder: null, sttController: null, sttAttempted: false, liveTranscript: '',
   };
   renderIntro(outlet, content);
@@ -133,6 +134,7 @@ function renderQuestion(outlet, content) {
   exam.curAttemptId = genId();
   exam.curHasRecording = false;
   exam.curTranscript = '';
+  exam.curScore = null;
   exam.recorder = null;
   exam.sttController = null;
   exam.sttAttempted = false;
@@ -250,6 +252,7 @@ function renderQuestion(outlet, content) {
     addAttempt({
       attemptId: exam.curAttemptId, questionId: q.id, mode: 'exam', selfRating: rating,
       createdAt: new Date().toISOString(), hasRecording: !!exam.curHasRecording, transcript: exam.curTranscript || '',
+      score: exam.curScore || null,
     }).catch((err) => console.warn('口試紀錄儲存失敗', err));
     exam.idx += 1;
     if (exam.idx >= exam.questions.length) renderClosing(outlet, content);
@@ -279,10 +282,38 @@ function showTranscriptStep(outlet, content, q) {
   box.hidden = false;
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const proceed = () => { exam.curTranscript = (area.value || '').trim(); revealAnswer(outlet, content, q); };
+  const proceed = () => {
+    exam.curTranscript = (area.value || '').trim();
+    exam.curScore = exam.curTranscript ? scoreAnswer(q, exam.curTranscript) : null;
+    revealAnswer(outlet, content, q);
+  };
   outlet.querySelector('#ex-tx-confirm').addEventListener('click', proceed);
-  outlet.querySelector('#ex-tx-skip').addEventListener('click', () => { exam.curTranscript = ''; revealAnswer(outlet, content, q); });
+  outlet.querySelector('#ex-tx-skip').addEventListener('click', () => { exam.curTranscript = ''; exam.curScore = null; revealAnswer(outlet, content, q); });
   outlet.querySelector('#ex-tx-redo').addEventListener('click', () => { renderQuestion(outlet, content); });
+}
+
+function scoreLevelClass(level) {
+  return { '優秀': 'lv-great', '良好': 'lv-good', '尚可': 'lv-ok', '需加強': 'lv-low', '需重新練習': 'lv-bad' }[level] || 'lv-ok';
+}
+
+function renderScore(s) {
+  if (!s) return '';
+  const chipList = (arr, empty) => (arr && arr.length)
+    ? `<div class="score-chips">${arr.map((x) => `<span class="score-chip">${esc(x)}</span>`).join('')}</div>`
+    : `<p class="facet-body muted">${esc(empty)}</p>`;
+  const hits = [...(s.hitKeywords || []), ...((s.hitBonusPoints || []).map((b) => (b.length > 16 ? b.slice(0, 16) + '…' : b)))];
+  const misses = [...(s.missedKeywords || []), ...((s.missedBonusPoints || []).map((b) => (b.length > 16 ? b.slice(0, 16) + '…' : b)))];
+  return `<section class="score-card">
+      <div class="score-head">
+        <span class="score-total">${s.totalScore}<small> / 100</small></span>
+        <span class="score-level ${scoreLevelClass(s.level)}">${esc(s.level)}</span>
+      </div>
+      <div class="score-block"><span class="score-label">命中重點</span>${chipList(hits, '尚未命中重點')}</div>
+      <div class="score-block"><span class="score-label">缺少重點</span>${chipList(misses, '沒有明顯缺漏')}</div>
+      <div class="score-block"><span class="score-label">可能失分</span>${chipList(s.possibleMistakes, '無明顯失分')}</div>
+      <div class="score-block"><span class="score-label">修正建議</span><p class="facet-body score-suggest">${esc(s.suggestion).replace(/\n/g, '<br>')}</p></div>
+      ${s.revisedAnswerHint ? `<div class="score-block"><span class="score-label">可以這樣說（30 秒示範）</span><p class="facet-body">${esc(s.revisedAnswerHint)}</p></div>` : ''}
+    </section>`;
 }
 
 function revealAnswer(outlet, content, q) {
@@ -298,6 +329,7 @@ function revealAnswer(outlet, content, q) {
 
   const box = outlet.querySelector('#ex-answer');
   box.innerHTML =
+    renderScore(exam.curScore) +
     facet('委員真正想看', '', 'want', `<p class="facet-body">${esc(q.examinerWants)}</p>`) +
     facet('30 秒回答', '30 秒', 'quick', `<p class="facet-body">${esc(q.quickAnswer)}</p>`) +
     `<section class="original">

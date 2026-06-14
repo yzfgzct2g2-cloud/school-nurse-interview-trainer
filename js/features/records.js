@@ -31,7 +31,13 @@ export function renderRecords(outlet, { content } = {}) {
       const txAttempt = list.find((a) => a.transcript && a.transcript.trim());
       const hasTx = !!txAttempt;
       const txSnippet = hasTx ? (txAttempt.transcript.trim().length > 24 ? txAttempt.transcript.trim().slice(0, 24) + '…' : txAttempt.transcript.trim()) : '';
-      return { q, qid, count: list.length, know, review, last, hasRec, isExam, hasTx, txSnippet, d: dimMeta(content, (q.dimensions || [])[0]) };
+      const scoreAttempt = list.find((a) => a.score && typeof a.score.totalScore === 'number');
+      const hasScore = !!scoreAttempt;
+      const scoreTotal = hasScore ? scoreAttempt.score.totalScore : null;
+      const scoreLevel = hasScore ? (scoreAttempt.score.level || '') : '';
+      const missArr = hasScore ? [...(scoreAttempt.score.missedKeywords || []), ...(scoreAttempt.score.missedBonusPoints || [])] : [];
+      const missedSummary = missArr.slice(0, 2).map((m) => (m.length > 14 ? m.slice(0, 14) + '…' : m)).join('、');
+      return { q, qid, count: list.length, know, review, last, hasRec, isExam, hasTx, txSnippet, hasScore, scoreTotal, scoreLevel, missedSummary, d: dimMeta(content, (q.dimensions || [])[0]) };
     }).filter(Boolean).sort((a, b) => (a.last.createdAt < b.last.createdAt ? 1 : -1));
 
     view.innerHTML = `
@@ -45,12 +51,14 @@ export function renderRecords(outlet, { content } = {}) {
           <div class="q-item-chips">
             <span class="chip" style="--dc:${esc(r.d.color)}">${esc(r.d.label)}</span>
             ${r.isExam ? '<span class="rec-tag exam">正式口試</span>' : ''}
+            ${r.hasScore ? `<span class="rec-tag score">${r.scoreTotal} 分・${esc(r.scoreLevel)}</span>` : ''}
             ${r.hasRec ? '<span class="rec-tag rec">🎙 有錄音</span>' : ''}
             ${r.hasTx ? '<span class="rec-tag tx">📝 有逐字稿</span>' : ''}
             <span class="rec-last ${r.last.selfRating === 'know' ? 'know' : 'review'}">${r.last.selfRating === 'know' ? '會了' : '再練'}</span>
           </div>
           <div class="q-item-title">${esc(r.q.title)}</div>
           <div class="rec-meta">練習 ${r.count} 次 · 會了 ${r.know} · 再練 ${r.review}</div>
+          ${r.hasScore && r.missedSummary ? `<div class="rec-tx">缺少：${esc(r.missedSummary)}</div>` : ''}
           ${r.hasTx ? `<div class="rec-tx">逐字稿摘要：「${esc(r.txSnippet)}」</div>` : ''}
         </a></li>`).join('')}</ul>`;
   }).catch((e) => {
