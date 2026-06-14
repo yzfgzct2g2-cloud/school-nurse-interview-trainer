@@ -3,6 +3,8 @@
 //     此時 isSupported() 回傳 false，UI 應改走「手動輸入逐字稿」。
 // v2：改接 Whisper API 補齊 iPhone 的語音辨識，介面不變。
 
+import { transcribeWithWhisper } from './whisperAdapter.js';
+
 const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
 export function isSupported() {
@@ -36,4 +38,46 @@ export function createRecognizer({ lang = 'zh-TW', onResult, onError, onEnd } = 
     abort: () => rec.abort(),
     getText: () => finalText,
   };
+}
+
+// 即時語音辨識控制器：在使用者回答期間擷取逐字稿；stop() 回傳統一結果物件。
+// 不支援時回傳 null（呼叫端 fallback 到手動輸入）。
+export function startLiveTranscription({ lang = 'zh-TW' } = {}) {
+  if (!isSupported()) return null;
+  let finalText = '';
+  let errored = false;
+  let onEndCb = null;
+  const ctl = createRecognizer({
+    lang,
+    onResult: (final) => { finalText = final; },
+    onError: () => { errored = true; },
+    onEnd: (txt) => { finalText = txt || finalText; if (onEndCb) onEndCb(); },
+  });
+  if (!ctl) return null;
+  try { ctl.start(); } catch (_) { /* 啟動失敗：交由 stop() 回空字串 */ }
+
+  return {
+    stop() {
+      return new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve({ transcript: (finalText || '').trim(), provider: 'webspeech', confidence: null, raw: { errored } });
+        };
+        onEndCb = finish;
+        try { ctl.stop(); } catch (_) { finish(); }
+        setTimeout(finish, 1500); // 保險：onend 未觸發時仍結束
+      });
+    },
+    abort() { try { ctl.abort(); } catch (_) {} },
+  };
+}
+
+// 可抽換的「由錄音 Blob 產生逐字稿」介面。
+// v1：Web Speech 無法處理 Blob，故此路徑委派 Whisper adapter（目前為 stub，會丟出錯誤）；
+//     呼叫端應 try/catch 後 fallback 到即時辨識結果或手動輸入。未來接上 Whisper 時介面不變。
+export async function transcribeAudio(audioBlob) {
+  const raw = await transcribeWithWhisper(audioBlob); // stub：throw「尚未啟用」
+  return { transcript: raw.text || '', provider: 'whisper', confidence: raw.confidence ?? null, raw };
 }

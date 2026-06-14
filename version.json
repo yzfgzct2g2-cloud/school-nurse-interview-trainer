@@ -1,11 +1,12 @@
 {
-  "version": "v1.4.0",
-  "build": "20260614-ai-voice-v1",
-  "sprint": "AI Voice Interview v1",
+  "version": "v1.5.0",
+  "build": "20260614-stt-v1",
+  "sprint": "Speech To Text v1",
   "releaseNote": [
-    "正式口試加入瀏覽器朗讀題目",
-    "正式口試加入錄音功能",
-    "錄音保存至 IndexedDB",
-    "成績紀錄顯示正式口試錄音狀態"
+    "正式口試加入逐字稿流程",
+    "支援瀏覽器語音辨識時自動產生逐字稿",
+    "不支援語音辨識時可手動輸入逐字稿",
+    "逐字稿保存至 IndexedDB",
+    "預留 Whisper API 介面但不暴露 API Key"
   ]
 }

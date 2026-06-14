@@ -1,5 +1,5 @@
 /* sw.js — 離線快取（cache-first） */
-const CACHE = 'snit-v8';
+const CACHE = 'snit-v9';
 
 const ASSETS = [
   '.',
@@ -28,6 +28,7 @@ const ASSETS = [
   'js/speech/tts.js',
   'js/speech/recorder.js',
   'js/speech/stt.js',
+  'js/speech/whisperAdapter.js',
   'js/ai/scorer.js',
   'js/ai/examiner.js',
   'data/dimensions.json',

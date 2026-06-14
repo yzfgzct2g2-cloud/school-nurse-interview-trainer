@@ -28,7 +28,10 @@ export function renderRecords(outlet, { content } = {}) {
       const review = list.filter((a) => a.selfRating === 'review').length;
       const hasRec = list.some((a) => a.hasRecording);
       const isExam = list.some((a) => a.mode === 'exam');
-      return { q, qid, count: list.length, know, review, last, hasRec, isExam, d: dimMeta(content, (q.dimensions || [])[0]) };
+      const txAttempt = list.find((a) => a.transcript && a.transcript.trim());
+      const hasTx = !!txAttempt;
+      const txSnippet = hasTx ? (txAttempt.transcript.trim().length > 24 ? txAttempt.transcript.trim().slice(0, 24) + '…' : txAttempt.transcript.trim()) : '';
+      return { q, qid, count: list.length, know, review, last, hasRec, isExam, hasTx, txSnippet, d: dimMeta(content, (q.dimensions || [])[0]) };
     }).filter(Boolean).sort((a, b) => (a.last.createdAt < b.last.createdAt ? 1 : -1));
 
     view.innerHTML = `
@@ -43,10 +46,12 @@ export function renderRecords(outlet, { content } = {}) {
             <span class="chip" style="--dc:${esc(r.d.color)}">${esc(r.d.label)}</span>
             ${r.isExam ? '<span class="rec-tag exam">正式口試</span>' : ''}
             ${r.hasRec ? '<span class="rec-tag rec">🎙 有錄音</span>' : ''}
+            ${r.hasTx ? '<span class="rec-tag tx">📝 有逐字稿</span>' : ''}
             <span class="rec-last ${r.last.selfRating === 'know' ? 'know' : 'review'}">${r.last.selfRating === 'know' ? '會了' : '再練'}</span>
           </div>
           <div class="q-item-title">${esc(r.q.title)}</div>
           <div class="rec-meta">練習 ${r.count} 次 · 會了 ${r.know} · 再練 ${r.review}</div>
+          ${r.hasTx ? `<div class="rec-tx">逐字稿摘要：「${esc(r.txSnippet)}」</div>` : ''}
         </a></li>`).join('')}</ul>`;
   }).catch((e) => {
     console.warn('讀取成績紀錄失敗', e);
