@@ -1,12 +1,12 @@
-// features/exam.js — 正式口試模式（v1.5.0：Speech To Text v1）
-// 流程：開場 → 自我介紹題(固定 SELF-001) → 依序 EMG/INF/PARENT/MENT/ADMIN 各 1 題（該類無題則從全部補齊）
-//        每題：朗讀題目(TTS) → 開始錄音(同時嘗試即時語音辨識) → 口頭回答 → 我回答完了(停止錄音/辨識、保存錄音) →
-//              逐字稿步驟(自動帶入或手動輸入、可編輯) → 確認/略過 → 展開 委員真正想看／30秒／完整／加分／失分／三追問
-//              (並朗讀第一追問) → 標記 會了/再練 → 下一題
+// features/exam.js — 正式口試模式（v1.6.1：回答碼表與時間提醒）
+// 流程：開場(可設定提醒秒數) → 自我介紹題(固定 SELF-001) → 依序 EMG/INF/PARENT/MENT/ADMIN 各 1 題 →
+//        每題：朗讀題目 → 開始錄音(同時起算回答碼表＋即時辨識) → 口頭回答 →
+//              (達提醒時間→只提示一次、不停錄音) → 我回答完了/停止錄音(停止計時、完整保存錄音) →
+//              逐字稿(自動帶入或手動補上、可編輯) → 確認 → 本地規則式評分 →
+//              展開 委員真正想看／30秒／完整／加分／失分／三追問 → 標記 會了/再練 → 下一題
 //        最後補充 → 結束頁。
-// 語音：SpeechSynthesis(朗讀)、MediaRecorder(錄音)、Web Speech(即時辨識)；皆有不支援/失敗時的優雅退場，不阻擋口試。
-// 不含：AI 評分、真正 Whisper/OpenAI 呼叫、AI 委員、即時追問、雷達圖等。
-import { getProfile } from '../core/settings.js';
+// 重點：30 秒(或設定值)只是提醒點，絕不停止錄音/辨識、不截斷、不自動跳步；錄音結束點＝我回答完了/停止錄音。
+import { getProfile, getReminderSec, setReminderSec } from '../core/settings.js';
 import { dimMeta } from '../core/content.js';
 import { addAttempt, genId, saveRecordingFull } from '../core/db.js';
 import { esc, appBar } from '../core/dom.js';
@@ -17,13 +17,17 @@ import { scoreAnswer } from '../ai/localScorer.js';
 
 let exam = null;
 
-function salutation() {
-  return (getProfile() || {}).salutation || '王小姐';
-}
+function salutation() { return (getProfile() || {}).salutation || '王小姐'; }
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+const REMINDER_OPTIONS = [30, 45, 60, 90, 120];
 
 function pickExamQuestions(content) {
   const cat = (q) => (q.id.split('-')[0] || '').toUpperCase();
@@ -66,11 +70,36 @@ function facetList(label, mod, arr) {
   </section>`;
 }
 
+// ---- 回答碼表 ----
+function startTimer(outlet) {
+  stopTimer();
+  exam.timerStartMs = Date.now();
+  exam.reminderFired = false;
+  const disp = outlet.querySelector('#ex-timer');
+  const remEl = outlet.querySelector('#ex-reminder-msg');
+  const tick = () => {
+    const sec = Math.floor((Date.now() - exam.timerStartMs) / 1000);
+    exam.curDurationSec = sec; // 暫存；錄音停止時改以錄音實際長度為準
+    if (disp) disp.textContent = fmtTime(sec);
+    if (!exam.reminderFired && sec >= exam.reminderSec) {
+      exam.reminderFired = true; // 只提醒一次
+      if (remEl) { remEl.textContent = '已達提醒時間，請準備收尾，但仍可繼續回答。'; remEl.hidden = false; }
+      try { if (navigator.vibrate) navigator.vibrate(200); } catch (_) {}
+    }
+  };
+  tick();
+  exam.timerInterval = setInterval(tick, 250); // 平滑停止；顯示為整數秒
+}
+function stopTimer() {
+  if (exam && exam.timerInterval) { clearInterval(exam.timerInterval); exam.timerInterval = null; }
+}
+
 async function stopAndSaveRecording(q, statusEl) {
   if (!exam.recorder) return;
   const rec = exam.recorder; exam.recorder = null;
   try {
     const { blob, mimeType, durationSec } = await rec.stop();
+    exam.curDurationSec = durationSec; // 完整回答時間（開始錄音→停止），非提醒秒數
     if (blob && blob.size) {
       const recordingId = genId();
       await saveRecordingFull({
@@ -78,7 +107,7 @@ async function stopAndSaveRecording(q, statusEl) {
         mode: 'exam', createdAt: new Date().toISOString(), audioBlob: blob, blob, mimeType, durationSec,
       });
       exam.curHasRecording = true;
-      if (statusEl) statusEl.textContent = `已保存錄音（約 ${durationSec} 秒）`;
+      if (statusEl) statusEl.textContent = `已完整保存錄音（${fmtTime(durationSec)}）`;
     } else if (statusEl) { statusEl.textContent = '錄音內容為空，未保存。'; }
   } catch (e) {
     console.warn('錄音保存失敗', e);
@@ -86,21 +115,18 @@ async function stopAndSaveRecording(q, statusEl) {
   }
 }
 
-// 停止即時辨識，回傳逐字稿字串（失敗或不支援回空字串）。
 async function stopLiveSTT() {
   if (!exam.sttController) return '';
   const ctl = exam.sttController; exam.sttController = null;
-  try {
-    const r = await ctl.stop();
-    return (r && r.transcript) || '';
-  } catch (_) { return ''; }
+  try { const r = await ctl.stop(); return (r && r.transcript) || ''; } catch (_) { return ''; }
 }
 
 export function renderExam(outlet, { content } = {}) {
   exam = {
     questions: pickExamQuestions(content), idx: 0, ratings: {}, supplement: '',
-    curAttemptId: null, curHasRecording: false, curTranscript: '', curScore: null,
+    curAttemptId: null, curHasRecording: false, curTranscript: '', curScore: null, curDurationSec: 0,
     recorder: null, sttController: null, sttAttempted: false, liveTranscript: '',
+    reminderSec: getReminderSec(), timerInterval: null, timerStartMs: 0, reminderFired: false,
   };
   renderIntro(outlet, content);
 }
@@ -108,22 +134,53 @@ export function renderExam(outlet, { content } = {}) {
 function renderIntro(outlet, content) {
   const salu = salutation();
   const openText = `${salu}您好。歡迎參加本次校護甄試。請先進行一分鐘自我介紹。`;
+  const cur = exam.reminderSec;
+  const isPreset = REMINDER_OPTIONS.includes(cur);
   outlet.innerHTML = `${appBar('正式口試')}
     <section class="view exam-intro">
       <p class="eyebrow">正式口試・開場</p>
       <h1 class="exam-greet">${esc(salu)}您好。<br>歡迎參加本次校護甄試。<br>請先進行一分鐘自我介紹。</h1>
+
+      <div class="exam-setting">
+        <label class="field-label" for="ex-reminder">回答提醒時間（到達時提醒，不會停止錄音）</label>
+        <select id="ex-reminder" class="text-input">
+          ${REMINDER_OPTIONS.map((o) => `<option value="${o}"${o === cur ? ' selected' : ''}>${o} 秒</option>`).join('')}
+          <option value="custom"${isPreset ? '' : ' selected'}>自訂秒數…</option>
+        </select>
+        <input id="ex-reminder-custom" class="text-input" type="number" min="5" step="5" placeholder="自訂秒數（例如 75）" style="${isPreset ? 'display:none;' : ''}margin-top:8px" value="${isPreset ? '' : cur}">
+      </div>
+
       ${ttsSupported() ? `<button class="btn-ghost btn-block" id="ex-tts" type="button">🔊 重新朗讀開場</button>` : ''}
       <button class="btn-primary btn-block" id="ex-start" type="button">開始口試</button>
     </section>`;
+
   if (ttsSupported()) {
     speak(openText);
     const t = outlet.querySelector('#ex-tts');
     if (t) t.addEventListener('click', () => speak(openText));
   }
-  outlet.querySelector('#ex-start').addEventListener('click', () => { cancelTTS(); exam.idx = 0; renderQuestion(outlet, content); });
+
+  const sel = outlet.querySelector('#ex-reminder');
+  const custom = outlet.querySelector('#ex-reminder-custom');
+  const applyReminder = () => {
+    let sec;
+    if (sel.value === 'custom') { custom.style.display = 'block'; sec = parseInt(custom.value, 10); }
+    else { custom.style.display = 'none'; sec = parseInt(sel.value, 10); }
+    if (Number.isFinite(sec) && sec > 0) { exam.reminderSec = sec; setReminderSec(sec); }
+  };
+  sel.addEventListener('change', applyReminder);
+  custom.addEventListener('input', applyReminder);
+
+  outlet.querySelector('#ex-start').addEventListener('click', () => {
+    applyReminder();
+    cancelTTS();
+    exam.idx = 0;
+    renderQuestion(outlet, content);
+  });
 }
 
 function renderQuestion(outlet, content) {
+  stopTimer();
   const q = exam.questions[exam.idx];
   const total = exam.questions.length;
   const last = exam.idx === total - 1;
@@ -135,10 +192,12 @@ function renderQuestion(outlet, content) {
   exam.curHasRecording = false;
   exam.curTranscript = '';
   exam.curScore = null;
+  exam.curDurationSec = 0;
   exam.recorder = null;
   exam.sttController = null;
   exam.sttAttempted = false;
   exam.liveTranscript = '';
+  exam.reminderFired = false;
 
   const canRec = recorderSupported();
   const canTTS = ttsSupported();
@@ -153,6 +212,13 @@ function renderQuestion(outlet, content) {
         </header>
 
         <div id="ex-answer-phase">
+          <div class="exam-timer-row">
+            <span class="exam-timer-label">回答時間</span>
+            <span class="exam-timer" id="ex-timer">00:00</span>
+            <span class="exam-timer-rem">提醒 ${exam.reminderSec} 秒</span>
+          </div>
+          <p class="exam-remind" id="ex-reminder-msg" hidden></p>
+
           <p class="exam-cue" id="ex-cue">委員正在朗讀題目，請聽完後口頭回答；可先按「開始錄音」。</p>
           <div class="exam-voice">
             ${canTTS ? `<button class="btn-ghost exam-vbtn" id="ex-tts" type="button">🔊 重新朗讀題目</button>` : ''}
@@ -167,10 +233,11 @@ function renderQuestion(outlet, content) {
 
         <div id="ex-transcript" hidden>
           <p class="p-rate-label">逐字稿（可修改後確認）</p>
+          <p class="exam-tx-help">系統已完整保存錄音；若自動逐字稿不完整，可在下方手動補上後再確認。評分會以你最後確認的逐字稿為準。</p>
           <p class="exam-tx-status" id="ex-tx-status"></p>
           <textarea id="ex-tx-area" class="note-area exam-tx-area" placeholder="逐字稿：可自動產生或手動輸入你的回答重點…"></textarea>
           <div class="exam-tx-actions">
-            <button class="btn-primary btn-block" id="ex-tx-confirm" type="button">確認逐字稿，查看參考答案</button>
+            <button class="btn-primary btn-block" id="ex-tx-confirm" type="button">確認逐字稿，進行評分</button>
             <button class="btn-ghost" id="ex-tx-skip" type="button">略過逐字稿</button>
             <button class="btn-ghost" id="ex-tx-redo" type="button">重新錄音</button>
           </div>
@@ -204,10 +271,10 @@ function renderQuestion(outlet, content) {
       statusEl.textContent = '準備中…';
       try {
         exam.recorder = await startRecording();
-        // 同步嘗試即時語音辨識（支援時）；失敗不影響錄音
         if (sttSupported()) {
           try { exam.sttController = startLiveTranscription({ lang: 'zh-TW' }); exam.sttAttempted = !!exam.sttController; } catch (_) { exam.sttController = null; }
         }
+        startTimer(outlet); // 開始錄音 → 立即起算碼表
         startBtn.hidden = true; stopBtn.hidden = false;
         statusEl.textContent = sttSupported() ? '🔴 錄音中…（同時辨識）' : '🔴 錄音中…';
       } catch (e) {
@@ -219,20 +286,21 @@ function renderQuestion(outlet, content) {
     });
     stopBtn.addEventListener('click', async () => {
       stopBtn.hidden = true; startBtn.hidden = false;
+      stopTimer(); // 停止錄音 → 停止計時，保留最後時間
       await stopAndSaveRecording(q, statusEl);
       exam.liveTranscript = await stopLiveSTT();
     });
   }
 
-  // 我回答完了 → 停止錄音/辨識 → 進入逐字稿步驟
+  // 我回答完了 → 停止計時/錄音/辨識（錄音以此為結束點）→ 逐字稿步驟
   outlet.querySelector('#ex-done').addEventListener('click', async () => {
     cancelTTS();
+    stopTimer();
     if (exam.recorder) { if (statusEl) statusEl.textContent = '儲存錄音中…'; await stopAndSaveRecording(q, statusEl); }
     if (exam.sttController) { exam.liveTranscript = await stopLiveSTT(); }
     showTranscriptStep(outlet, content, q);
   });
 
-  // 會了 / 再練
   const rateEl = outlet.querySelector('#ex-rate');
   rateEl.addEventListener('click', (e) => {
     const b = e.target.closest('.exam-rate-btn');
@@ -242,17 +310,17 @@ function renderQuestion(outlet, content) {
     b.classList.add('is-chosen');
   });
 
-  // 下一題：存一筆 attempt（含 transcript、hasRecording）
   outlet.querySelector('#ex-next').addEventListener('click', () => {
     cancelTTS();
+    stopTimer();
     if (exam.recorder) { try { exam.recorder.cancel(); } catch (_) {} exam.recorder = null; }
     if (exam.sttController) { try { exam.sttController.abort(); } catch (_) {} exam.sttController = null; }
     const rating = exam.ratings[q.id] || 'review';
     exam.ratings[q.id] = rating;
     addAttempt({
       attemptId: exam.curAttemptId, questionId: q.id, mode: 'exam', selfRating: rating,
-      createdAt: new Date().toISOString(), hasRecording: !!exam.curHasRecording, transcript: exam.curTranscript || '',
-      score: exam.curScore || null,
+      createdAt: new Date().toISOString(), hasRecording: !!exam.curHasRecording,
+      durationSec: exam.curDurationSec || 0, transcript: exam.curTranscript || '', score: exam.curScore || null,
     }).catch((err) => console.warn('口試紀錄儲存失敗', err));
     exam.idx += 1;
     if (exam.idx >= exam.questions.length) renderClosing(outlet, content);
@@ -260,7 +328,6 @@ function renderQuestion(outlet, content) {
   });
 }
 
-// 逐字稿步驟：自動帶入即時辨識結果或手動輸入，可編輯，再確認/略過/重新錄音
 function showTranscriptStep(outlet, content, q) {
   const phase = outlet.querySelector('#ex-answer-phase');
   const box = outlet.querySelector('#ex-transcript');
@@ -272,9 +339,9 @@ function showTranscriptStep(outlet, content, q) {
   if (!sttSupported()) {
     status.textContent = '此裝置暫不支援自動語音辨識，請手動輸入回答逐字稿。';
   } else if (exam.sttAttempted && exam.liveTranscript) {
-    status.textContent = '已自動產生逐字稿，可修改後確認。';
+    status.textContent = '已自動產生逐字稿（可能不完整），請確認或補上後再評分。';
   } else if (exam.sttAttempted && !exam.liveTranscript) {
-    status.textContent = '語音辨識失敗，請手動輸入或略過逐字稿。';
+    status.textContent = '語音辨識失敗或未取得文字，請手動輸入或略過逐字稿。';
   } else {
     status.textContent = '可手動輸入回答逐字稿，或直接略過。';
   }
@@ -283,7 +350,7 @@ function showTranscriptStep(outlet, content, q) {
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const proceed = () => {
-    exam.curTranscript = (area.value || '').trim();
+    exam.curTranscript = (area.value || '').trim(); // 評分以最後確認的逐字稿為準
     exam.curScore = exam.curTranscript ? scoreAnswer(q, exam.curTranscript) : null;
     revealAnswer(outlet, content, q);
   };
@@ -295,7 +362,6 @@ function showTranscriptStep(outlet, content, q) {
 function scoreLevelClass(level) {
   return { '優秀': 'lv-great', '良好': 'lv-good', '尚可': 'lv-ok', '需加強': 'lv-low', '需重新練習': 'lv-bad' }[level] || 'lv-ok';
 }
-
 function renderScore(s) {
   if (!s) return '';
   const chipList = (arr, empty) => (arr && arr.length)
@@ -348,6 +414,7 @@ function revealAnswer(outlet, content, q) {
 
 function renderClosing(outlet, content) {
   cancelTTS();
+  stopTimer();
   if (exam.recorder) { try { exam.recorder.cancel(); } catch (_) {} exam.recorder = null; }
   if (exam.sttController) { try { exam.sttController.abort(); } catch (_) {} exam.sttController = null; }
   const salu = salutation();

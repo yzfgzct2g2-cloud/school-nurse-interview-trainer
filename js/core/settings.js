@@ -57,3 +57,16 @@ export function getUI(key, fallback) {
   return v === null ? fallback : v;
 }
 export function setUI(key, value) { localStorage.setItem(k('ui:' + key), value); }
+
+// --- 正式口試：回答提醒秒數（localStorage key 固定為 oralExamReminderSec；預設 30）---
+const REMINDER_KEY = 'oralExamReminderSec';
+export function getReminderSec() {
+  const v = parseInt(localStorage.getItem(REMINDER_KEY), 10);
+  return Number.isFinite(v) && v > 0 ? v : 30;
+}
+export function setReminderSec(sec) {
+  const n = parseInt(sec, 10);
+  if (Number.isFinite(n) && n > 0) {
+    try { localStorage.setItem(REMINDER_KEY, String(n)); } catch (e) { console.warn('提醒秒數寫入失敗', e); }
+  }
+}

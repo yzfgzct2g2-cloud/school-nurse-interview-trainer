@@ -1,5 +1,5 @@
 /* sw.js — 離線快取（cache-first） */
-const CACHE = 'snit-v10';
+const CACHE = 'snit-v11';
 
 const ASSETS = [
   '.',

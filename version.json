@@ -1,12 +1,12 @@
 {
-  "version": "v1.6.0",
-  "build": "20260614-local-score-v1",
-  "sprint": "Local AI Scoring v1",
+  "version": "v1.6.1",
+  "build": "20260614-answer-timer",
+  "sprint": "Answer Timer Reminder",
   "releaseNote": [
-    "正式口試加入本地規則式評分",
-    "依題庫關鍵字與加分重點計算分數",
-    "顯示命中重點與缺少重點",
-    "評分結果保存至 IndexedDB",
-    "成績紀錄顯示分數與等級"
+    "正式口試加入回答碼表",
+    "新增可設定回答提醒時間",
+    "提醒時間到達後不停止錄音",
+    "完整錄音檔持續保存",
+    "評分改以使用者確認後的完整逐字稿為準"
   ]
 }

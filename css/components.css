@@ -484,3 +484,15 @@
 .score-chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--bg-soft, rgba(0,0,0,0.05)); color: var(--ink); }
 .score-suggest { white-space: normal; line-height: 1.7; }
 .rec-tag.score { background: rgba(0,0,0,0.06); color: var(--ink); font-weight: 700; }
+
+/* ===== 正式口試：回答碼表與提醒 (v1.6.1) ===== */
+.exam-timer-row { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 8px; }
+.exam-timer-label { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.exam-timer { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: var(--font-mono, monospace); color: var(--ink); line-height: 1; }
+.exam-timer-rem { margin-left: auto; font-size: 12px; color: var(--ink-faint); }
+/* 提醒＝資訊提示，刻意不用紅色錯誤樣式 */
+.exam-remind { margin: 4px 0 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  background: rgba(190,122,53,0.12); color: #8a5a1f; border: 1px solid rgba(190,122,53,0.28); }
+.exam-tx-help { font-size: 13px; line-height: 1.6; color: var(--ink-soft); background: var(--bg-soft, rgba(0,0,0,0.04));
+  padding: 10px 12px; border-radius: 10px; margin: 4px 0 10px; }
+.exam-setting { margin: 14px 0; text-align: left; }
