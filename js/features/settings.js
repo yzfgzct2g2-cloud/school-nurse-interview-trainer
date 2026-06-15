@@ -1,6 +1,7 @@
 // features/settings.js — 設定（修改口試稱呼與姓名）
 // 重用 setup 的 chip-select 樣式；儲存沿用 core/settings.setProfile，不改資料結構。
 import { getProfile, setProfile } from '../core/settings.js';
+import { getWorkerUrl, setWorkerUrl } from '../core/apiConfig.js';
 import { esc, appBar } from '../core/dom.js';
 
 const PRESETS = ['王小姐', '王先生', '護理師', '老師'];
@@ -27,6 +28,14 @@ export function renderSettings(outlet) {
 
       <button id="settings-save" class="btn-primary btn-block" type="button">儲存設定</button>
       <p class="note-status" id="settings-status"></p>
+
+      <hr class="settings-sep">
+      <h2 class="setup-title">AI 委員 API（選用）</h2>
+      <p class="setup-sub">貼上你自建的 Cloudflare Worker 網址即可啟用 OpenAI AI 委員評分。未設定時，正式口試會自動使用本地規則式評分。設定方式請見 docs/openai-worker-setup.md。前端不會保存任何 API Key。</p>
+      <label class="field-label" for="worker-url">OpenAI Worker URL</label>
+      <input id="worker-url" class="text-input" type="url" inputmode="url" placeholder="https://你的-worker.workers.dev" autocomplete="off" value="${esc(getWorkerUrl())}">
+      <button id="worker-save" class="btn-ghost btn-block" type="button">儲存 Worker URL</button>
+      <p class="note-status" id="worker-status">${getWorkerUrl() ? '目前已設定 AI 委員 API。' : '尚未設定 AI 委員 API，將使用本地評分。'}</p>
     </section>`;
 
   const presets = outlet.querySelector('#salu-presets');
@@ -56,5 +65,13 @@ export function renderSettings(outlet) {
     const prev = getProfile() || {};
     setProfile({ ...prev, name, salutation: finalSalu });
     status.textContent = `已儲存，口試將稱呼您為「${finalSalu}」。`;
+  });
+
+  outlet.querySelector('#worker-save').addEventListener('click', () => {
+    const url = outlet.querySelector('#worker-url').value.trim();
+    setWorkerUrl(url);
+    outlet.querySelector('#worker-status').textContent = url
+      ? '已儲存 Worker URL，正式口試將嘗試使用 AI 委員評分（失敗會自動改用本地評分）。'
+      : '已清除 Worker URL，將使用本地評分。';
   });
 }

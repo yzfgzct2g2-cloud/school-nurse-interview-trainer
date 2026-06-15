@@ -31,13 +31,23 @@ export function renderRecords(outlet, { content } = {}) {
       const txAttempt = list.find((a) => a.transcript && a.transcript.trim());
       const hasTx = !!txAttempt;
       const txSnippet = hasTx ? (txAttempt.transcript.trim().length > 24 ? txAttempt.transcript.trim().slice(0, 24) + '…' : txAttempt.transcript.trim()) : '';
-      const scoreAttempt = list.find((a) => a.score && typeof a.score.totalScore === 'number');
-      const hasScore = !!scoreAttempt;
-      const scoreTotal = hasScore ? scoreAttempt.score.totalScore : null;
-      const scoreLevel = hasScore ? (scoreAttempt.score.level || '') : '';
-      const missArr = hasScore ? [...(scoreAttempt.score.missedKeywords || []), ...(scoreAttempt.score.missedBonusPoints || [])] : [];
+      // 評分顯示：優先 AI 委員（aiScore.score），否則本地評分（score.totalScore）
+      const aiAttempt = list.find((a) => a.aiScore && typeof a.aiScore.score === 'number');
+      const localAttempt = list.find((a) => a.score && typeof a.score.totalScore === 'number');
+      const hasScore = !!(aiAttempt || localAttempt);
+      const useAi = !!aiAttempt;
+      const scoreTotal = useAi ? aiAttempt.aiScore.score : (localAttempt ? localAttempt.score.totalScore : null);
+      const scoreLevel = useAi ? (aiAttempt.aiScore.level || '') : (localAttempt ? (localAttempt.score.level || '') : '');
+      const aiSource = useAi ? 'OpenAI' : (hasScore ? '本地評分' : '');
+      const missArr = useAi
+        ? (aiAttempt.aiScore.missedPoints || [])
+        : (localAttempt ? [...(localAttempt.score.missedKeywords || []), ...(localAttempt.score.missedBonusPoints || [])] : []);
       const missedSummary = missArr.slice(0, 2).map((m) => (m.length > 14 ? m.slice(0, 14) + '…' : m)).join('、');
-      return { q, qid, count: list.length, know, review, last, hasRec, isExam, hasTx, txSnippet, hasScore, scoreTotal, scoreLevel, missedSummary, d: dimMeta(content, (q.dimensions || [])[0]) };
+      const followAttempt = list.find((a) => a.aiFollowUpQuestion && a.aiFollowUpQuestion.trim());
+      const aiFollowUp = followAttempt ? followAttempt.aiFollowUpQuestion.trim() : '';
+      const sugSrc = useAi ? (aiAttempt.aiScore.suggestion || '') : (localAttempt ? (localAttempt.score.suggestion || '') : '');
+      const suggestionSummary = sugSrc ? (sugSrc.split('\n')[0].length > 30 ? sugSrc.split('\n')[0].slice(0, 30) + '…' : sugSrc.split('\n')[0]) : '';
+      return { q, qid, count: list.length, know, review, last, hasRec, isExam, hasTx, txSnippet, hasScore, scoreTotal, scoreLevel, aiSource, missedSummary, aiFollowUp, suggestionSummary, d: dimMeta(content, (q.dimensions || [])[0]) };
     }).filter(Boolean).sort((a, b) => (a.last.createdAt < b.last.createdAt ? 1 : -1));
 
     view.innerHTML = `
@@ -52,6 +62,7 @@ export function renderRecords(outlet, { content } = {}) {
             <span class="chip" style="--dc:${esc(r.d.color)}">${esc(r.d.label)}</span>
             ${r.isExam ? '<span class="rec-tag exam">正式口試</span>' : ''}
             ${r.hasScore ? `<span class="rec-tag score">${r.scoreTotal} 分・${esc(r.scoreLevel)}</span>` : ''}
+            ${r.hasScore && r.aiSource ? `<span class="rec-tag aisrc">${esc(r.aiSource)}</span>` : ''}
             ${r.hasRec ? '<span class="rec-tag rec">🎙 有錄音</span>' : ''}
             ${r.hasTx ? '<span class="rec-tag tx">📝 有逐字稿</span>' : ''}
             <span class="rec-last ${r.last.selfRating === 'know' ? 'know' : 'review'}">${r.last.selfRating === 'know' ? '會了' : '再練'}</span>
@@ -59,6 +70,8 @@ export function renderRecords(outlet, { content } = {}) {
           <div class="q-item-title">${esc(r.q.title)}</div>
           <div class="rec-meta">練習 ${r.count} 次 · 會了 ${r.know} · 再練 ${r.review}</div>
           ${r.hasScore && r.missedSummary ? `<div class="rec-tx">缺少：${esc(r.missedSummary)}</div>` : ''}
+          ${r.suggestionSummary ? `<div class="rec-tx">修正建議：${esc(r.suggestionSummary)}</div>` : ''}
+          ${r.aiFollowUp ? `<div class="rec-tx">AI 追問：${esc(r.aiFollowUp)}</div>` : ''}
           ${r.hasTx ? `<div class="rec-tx">逐字稿摘要：「${esc(r.txSnippet)}」</div>` : ''}
         </a></li>`).join('')}</ul>`;
   }).catch((e) => {

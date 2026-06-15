@@ -1,12 +1,12 @@
 {
-  "version": "v1.6.1",
-  "build": "20260614-answer-timer",
-  "sprint": "Answer Timer Reminder",
+  "version": "v1.7.0",
+  "build": "20260614-openai-examiner-v1",
+  "sprint": "OpenAI API Examiner v1",
   "releaseNote": [
-    "正式口試加入回答碼表",
-    "新增可設定回答提醒時間",
-    "提醒時間到達後不停止錄音",
-    "完整錄音檔持續保存",
-    "評分改以使用者確認後的完整逐字稿為準"
+    "新增 OpenAI API AI 委員評分",
+    "新增 Cloudflare Worker 後端代理",
+    "AI 委員可依逐字稿產生評分與追問",
+    "API 失敗時自動改用本地規則式評分",
+    "新增 OpenAI Worker 設定說明"
   ]
 }

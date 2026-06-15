@@ -14,6 +14,7 @@ import { speak, cancel as cancelTTS, isSupported as ttsSupported } from '../spee
 import { recorderSupported, startRecording } from '../speech/recorder.js';
 import { isSupported as sttSupported, startLiveTranscription } from '../speech/stt.js';
 import { scoreAnswer } from '../ai/localScorer.js';
+import { scoreWithOpenAI, hasWorkerUrl } from '../ai/openaiExaminer.js';
 
 let exam = null;
 
@@ -125,6 +126,7 @@ export function renderExam(outlet, { content } = {}) {
   exam = {
     questions: pickExamQuestions(content), idx: 0, ratings: {}, supplement: '',
     curAttemptId: null, curHasRecording: false, curTranscript: '', curScore: null, curDurationSec: 0,
+    curAiScore: null, curAiProvider: 'local', curAiFollowUp: '',
     recorder: null, sttController: null, sttAttempted: false, liveTranscript: '',
     reminderSec: getReminderSec(), timerInterval: null, timerStartMs: 0, reminderFired: false,
   };
@@ -192,6 +194,9 @@ function renderQuestion(outlet, content) {
   exam.curHasRecording = false;
   exam.curTranscript = '';
   exam.curScore = null;
+  exam.curAiScore = null;
+  exam.curAiProvider = 'local';
+  exam.curAiFollowUp = '';
   exam.curDurationSec = 0;
   exam.recorder = null;
   exam.sttController = null;
@@ -321,6 +326,7 @@ function renderQuestion(outlet, content) {
       attemptId: exam.curAttemptId, questionId: q.id, mode: 'exam', selfRating: rating,
       createdAt: new Date().toISOString(), hasRecording: !!exam.curHasRecording,
       durationSec: exam.curDurationSec || 0, transcript: exam.curTranscript || '', score: exam.curScore || null,
+      aiScore: exam.curAiScore || null, aiProvider: exam.curAiProvider || 'local', aiFollowUpQuestion: exam.curAiFollowUp || '',
     }).catch((err) => console.warn('口試紀錄儲存失敗', err));
     exam.idx += 1;
     if (exam.idx >= exam.questions.length) renderClosing(outlet, content);
@@ -349,9 +355,29 @@ function showTranscriptStep(outlet, content, q) {
   box.hidden = false;
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const proceed = () => {
+  const proceed = async () => {
     exam.curTranscript = (area.value || '').trim(); // 評分以最後確認的逐字稿為準
-    exam.curScore = exam.curTranscript ? scoreAnswer(q, exam.curTranscript) : null;
+    exam.curScore = exam.curTranscript ? scoreAnswer(q, exam.curTranscript) : null; // 本地評分（一律保留）
+    exam.curAiScore = null; exam.curAiProvider = 'local'; exam.curAiFollowUp = '';
+
+    if (exam.curTranscript) {
+      const btn = outlet.querySelector('#ex-tx-confirm');
+      if (!hasWorkerUrl()) {
+        if (status) status.textContent = '尚未設定 AI 委員 API，將使用本地評分。';
+      } else {
+        if (btn) { btn.disabled = true; btn.textContent = 'AI 委員評分中…'; }
+        if (status) status.textContent = 'AI 委員評分中…（若失敗將自動改用本地評分）';
+        const examinerBank = {
+          examinerWants: q.examinerWants,
+          bonusPoints: q.bonusPoints,
+          commonMistakes: q.commonMistakes,
+          followups: (q.followups || []).map((f) => f && f.question).filter(Boolean),
+        };
+        const ai = await scoreWithOpenAI({ question: q, examinerBank, transcript: exam.curTranscript, candidateName: salutation() });
+        if (ai) { exam.curAiScore = ai; exam.curAiProvider = 'openai'; exam.curAiFollowUp = ai.followUpQuestion || ''; }
+        if (btn) { btn.disabled = false; btn.textContent = '確認逐字稿，進行評分'; }
+      }
+    }
     revealAnswer(outlet, content, q);
   };
   outlet.querySelector('#ex-tx-confirm').addEventListener('click', proceed);
@@ -382,6 +408,27 @@ function renderScore(s) {
     </section>`;
 }
 
+function renderAiScore(ai) {
+  if (!ai) return '';
+  const chipList = (arr, empty) => (arr && arr.length)
+    ? `<div class="score-chips">${arr.map((x) => `<span class="score-chip">${esc(x)}</span>`).join('')}</div>`
+    : `<p class="facet-body muted">${esc(empty)}</p>`;
+  return `<section class="score-card ai-card">
+      <div class="score-head">
+        <span class="score-total">${ai.score}<small> / 100</small></span>
+        <span class="score-level ${scoreLevelClass(ai.level)}">${esc(ai.level)}</span>
+        <span class="ai-source-tag">AI 委員（OpenAI）</span>
+      </div>
+      ${ai.committeeComment ? `<div class="score-block"><span class="score-label">委員講評</span><p class="facet-body">${esc(ai.committeeComment)}</p></div>` : ''}
+      <div class="score-block"><span class="score-label">優點</span>${chipList(ai.strengths, '—')}</div>
+      <div class="score-block"><span class="score-label">缺少重點</span>${chipList(ai.missedPoints, '沒有明顯缺漏')}</div>
+      <div class="score-block"><span class="score-label">可能失分</span>${chipList(ai.riskPoints, '無明顯失分')}</div>
+      ${ai.suggestion ? `<div class="score-block"><span class="score-label">修正建議</span><p class="facet-body">${esc(ai.suggestion)}</p></div>` : ''}
+      ${ai.revisedAnswer ? `<div class="score-block"><span class="score-label">修正版回答</span><p class="facet-body">${esc(ai.revisedAnswer)}</p></div>` : ''}
+      ${ai.followUpQuestion ? `<div class="score-block"><span class="score-label">AI 追問</span><p class="facet-body">${esc(ai.followUpQuestion)}</p></div>` : ''}
+    </section>`;
+}
+
 function revealAnswer(outlet, content, q) {
   const txBox = outlet.querySelector('#ex-transcript');
   if (txBox) txBox.hidden = true;
@@ -393,9 +440,14 @@ function revealAnswer(outlet, content, q) {
       ).join('')
     : facet('追問', '', 'followup', '<p class="facet-body muted">本題暫無延伸追問。</p>');
 
+  // 評分區：AI 委員成功則顯示 AI 評分，否則顯示本地規則式評分
+  const scoreHtml = (exam.curAiProvider === 'openai' && exam.curAiScore)
+    ? renderAiScore(exam.curAiScore)
+    : renderScore(exam.curScore);
+
   const box = outlet.querySelector('#ex-answer');
   box.innerHTML =
-    renderScore(exam.curScore) +
+    scoreHtml +
     facet('委員真正想看', '', 'want', `<p class="facet-body">${esc(q.examinerWants)}</p>`) +
     facet('30 秒回答', '30 秒', 'quick', `<p class="facet-body">${esc(q.quickAnswer)}</p>`) +
     `<section class="original">
