@@ -502,3 +502,12 @@
 .ai-source-tag { margin-left: auto; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(62,96,117,0.16); color: var(--brand, #3E6075); }
 .rec-tag.aisrc { background: rgba(62,96,117,0.12); color: var(--brand, #3E6075); font-weight: 700; }
 .settings-sep { border: none; border-top: 1px solid var(--line); margin: 24px 0 8px; }
+
+/* ===== 單題 AI 口語：入口與紀錄標記 (v1.8.0) ===== */
+.oral-entry { margin: 4px 0 14px; }
+.q-item-li { display: flex; flex-direction: column; }
+.q-item-oral { display: inline-block; align-self: flex-start; margin: 6px 0 2px; padding: 6px 12px; font-size: 13px; font-weight: 700;
+  color: var(--brand, #3E6075); background: rgba(62,96,117,0.10); border-radius: 999px; text-decoration: none; }
+.q-item-oral:active { background: rgba(62,96,117,0.18); }
+.rec-tag.so { background: rgba(122,62,117,0.14); color: #7A3E75; font-weight: 700; }
+.rec-tag.plain { background: rgba(0,0,0,0.06); color: var(--ink-soft); }

@@ -1,12 +1,12 @@
 {
-  "version": "v1.7.0",
-  "build": "20260614-openai-examiner-v1",
-  "sprint": "OpenAI API Examiner v1",
+  "version": "v1.8.0",
+  "build": "20260616-single-ai-oral",
+  "sprint": "Single AI Oral Practice",
   "releaseNote": [
-    "新增 OpenAI API AI 委員評分",
-    "新增 Cloudflare Worker 後端代理",
-    "AI 委員可依逐字稿產生評分與追問",
-    "API 失敗時自動改用本地規則式評分",
-    "新增 OpenAI Worker 設定說明"
+    "新增單題AI口語練習",
+    "任一題目可直接錄音與AI評分",
+    "新增最多三輪AI追問",
+    "保存整場單題口試紀錄",
+    "成績紀錄可查看完整AI口試內容"
   ]
 }

@@ -1,5 +1,5 @@
 /* sw.js — 離線快取（cache-first） */
-const CACHE = 'snit-v12';
+const CACHE = 'snit-v13';
 
 const ASSETS = [
   '.',
@@ -19,6 +19,7 @@ const ASSETS = [
   'js/features/knowledge.js',
   'js/features/practice.js',
   'js/features/exam.js',
+  'js/features/oralPracticeCore.js',
   'js/features/cram.js',
   'js/features/notes.js',
   'js/features/settings.js',

@@ -16,11 +16,14 @@ function dimChips(content, q) {
 }
 
 function listItem(content, q) {
-  return `<li><a class="q-item" href="#/q/${encodeURIComponent(q.id)}">
-    <div class="q-item-chips">${dimChips(content, q)}${isCollected(q.id) ? '<span class="star">★</span>' : ''}</div>
-    <div class="q-item-title">${esc(q.title)}</div>
-    <div class="q-item-hook">${esc(q.memoryHook || '')}</div>
-  </a></li>`;
+  return `<li class="q-item-li">
+    <a class="q-item" href="#/q/${encodeURIComponent(q.id)}">
+      <div class="q-item-chips">${dimChips(content, q)}${isCollected(q.id) ? '<span class="star">★</span>' : ''}</div>
+      <div class="q-item-title">${esc(q.title)}</div>
+      <div class="q-item-hook">${esc(q.memoryHook || '')}</div>
+    </a>
+    <a class="q-item-oral" href="#/oral/${encodeURIComponent(q.id)}">🎤 AI口語練習</a>
+  </li>`;
 }
 
 function resultsHtml(content, { query, fav }) {
@@ -113,6 +116,8 @@ export function renderQuestion(outlet, { content, id } = {}) {
           </button>
         </div>
       </header>
+
+      <a class="btn-primary btn-block oral-entry" href="#/oral/${encodeURIComponent(q.id)}">🎤 開始 AI 口語練習</a>
 
       ${facet('快速回答', '30 秒', 'quick', `<p class="facet-body">${esc(q.quickAnswer)}</p>`)}
       ${facet('一句記憶', '', 'hook', `<p class="facet-hook">${esc(q.memoryHook)}</p>`)}

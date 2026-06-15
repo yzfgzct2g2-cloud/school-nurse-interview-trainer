@@ -99,6 +99,7 @@ function renderRun(outlet, content) {
           <div class="facet-head"><span class="facet-label">你的回答</span><span class="facet-tag">先自己講一次</span></div>
           <textarea id="p-ans" class="note-area" placeholder="可以用講的，也可以打字抓重點…（這格不會被儲存，只幫你聚焦）"></textarea>
         </section>
+        <a class="btn-ghost btn-block oral-entry" href="#/oral/${encodeURIComponent(q.id)}">🎤 口語練習這一題（AI 委員）</a>
         <div id="p-reveal"></div>
         <div id="p-actions"><button class="btn-primary btn-block" id="p-show" type="button">看解答</button></div>
       </article>

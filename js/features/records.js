@@ -3,6 +3,8 @@ import { getAllAttempts } from '../core/db.js';
 import { dimMeta } from '../core/content.js';
 import { esc, appBar } from '../core/dom.js';
 
+function levelOf(n) { return n >= 90 ? '優秀' : n >= 80 ? '良好' : n >= 70 ? '尚可' : n >= 60 ? '需加強' : '需重新練習'; }
+
 export function renderRecords(outlet, { content } = {}) {
   outlet.innerHTML = `${appBar('成績紀錄')}<section class="view records"><p class="empty">讀取中…</p></section>`;
 
@@ -28,26 +30,36 @@ export function renderRecords(outlet, { content } = {}) {
       const review = list.filter((a) => a.selfRating === 'review').length;
       const hasRec = list.some((a) => a.hasRecording);
       const isExam = list.some((a) => a.mode === 'exam');
+      const isPractice = list.some((a) => a.mode === 'practice');
+      const soAttempt = list.find((a) => a.mode === 'single-oral');
+      const isSingleOral = !!soAttempt;
       const txAttempt = list.find((a) => a.transcript && a.transcript.trim());
       const hasTx = !!txAttempt;
       const txSnippet = hasTx ? (txAttempt.transcript.trim().length > 24 ? txAttempt.transcript.trim().slice(0, 24) + '…' : txAttempt.transcript.trim()) : '';
       // 評分顯示：優先 AI 委員（aiScore.score），否則本地評分（score.totalScore）
       const aiAttempt = list.find((a) => a.aiScore && typeof a.aiScore.score === 'number');
       const localAttempt = list.find((a) => a.score && typeof a.score.totalScore === 'number');
-      const hasScore = !!(aiAttempt || localAttempt);
-      const useAi = !!aiAttempt;
-      const scoreTotal = useAi ? aiAttempt.aiScore.score : (localAttempt ? localAttempt.score.totalScore : null);
-      const scoreLevel = useAi ? (aiAttempt.aiScore.level || '') : (localAttempt ? (localAttempt.score.level || '') : '');
-      const aiSource = useAi ? 'OpenAI' : (hasScore ? '本地評分' : '');
+      const soHasScore = isSingleOral && typeof soAttempt.finalScore === 'number';
+      const hasScore = !!(soHasScore || aiAttempt || localAttempt);
+      const useAi = !soHasScore && !!aiAttempt;
+      const scoreTotal = soHasScore ? soAttempt.finalScore : (useAi ? aiAttempt.aiScore.score : (localAttempt ? localAttempt.score.totalScore : null));
+      const scoreLevel = soHasScore ? levelOf(soAttempt.finalScore) : (useAi ? (aiAttempt.aiScore.level || '') : (localAttempt ? (localAttempt.score.level || '') : ''));
+      const aiSource = soHasScore ? (soAttempt.aiProvider === 'openai' ? 'OpenAI' : '本地評分') : (useAi ? 'OpenAI' : (hasScore ? '本地評分' : ''));
       const missArr = useAi
         ? (aiAttempt.aiScore.missedPoints || [])
         : (localAttempt ? [...(localAttempt.score.missedKeywords || []), ...(localAttempt.score.missedBonusPoints || [])] : []);
-      const missedSummary = missArr.slice(0, 2).map((m) => (m.length > 14 ? m.slice(0, 14) + '…' : m)).join('、');
+      const missedSummary = (!soHasScore) ? missArr.slice(0, 2).map((m) => (m.length > 14 ? m.slice(0, 14) + '…' : m)).join('、') : '';
       const followAttempt = list.find((a) => a.aiFollowUpQuestion && a.aiFollowUpQuestion.trim());
       const aiFollowUp = followAttempt ? followAttempt.aiFollowUpQuestion.trim() : '';
       const sugSrc = useAi ? (aiAttempt.aiScore.suggestion || '') : (localAttempt ? (localAttempt.score.suggestion || '') : '');
-      const suggestionSummary = sugSrc ? (sugSrc.split('\n')[0].length > 30 ? sugSrc.split('\n')[0].slice(0, 30) + '…' : sugSrc.split('\n')[0]) : '';
-      return { q, qid, count: list.length, know, review, last, hasRec, isExam, hasTx, txSnippet, hasScore, scoreTotal, scoreLevel, aiSource, missedSummary, aiFollowUp, suggestionSummary, d: dimMeta(content, (q.dimensions || [])[0]) };
+      const suggestionSummary = (!soHasScore && sugSrc) ? (sugSrc.split('\n')[0].length > 30 ? sugSrc.split('\n')[0].slice(0, 30) + '…' : sugSrc.split('\n')[0]) : '';
+      // 單題 AI 口語：委員總評摘要 + 各輪追問題
+      const soSummary = isSingleOral && soAttempt.committeeSummary
+        ? (soAttempt.committeeSummary.length > 40 ? soAttempt.committeeSummary.slice(0, 40) + '…' : soAttempt.committeeSummary) : '';
+      const soFollowups = isSingleOral && Array.isArray(soAttempt.rounds)
+        ? soAttempt.rounds.filter((rd) => rd.type && rd.type.indexOf('followup') === 0 && rd.question).map((rd) => rd.question) : [];
+      const soFollowSummary = soFollowups.length ? soFollowups.map((x) => (x.length > 18 ? x.slice(0, 18) + '…' : x)).join('；') : '';
+      return { q, qid, count: list.length, know, review, last, hasRec, isExam, isPractice, isSingleOral, hasTx, txSnippet, hasScore, scoreTotal, scoreLevel, aiSource, missedSummary, aiFollowUp, suggestionSummary, soSummary, soFollowSummary, d: dimMeta(content, (q.dimensions || [])[0]) };
     }).filter(Boolean).sort((a, b) => (a.last.createdAt < b.last.createdAt ? 1 : -1));
 
     view.innerHTML = `
@@ -61,6 +73,8 @@ export function renderRecords(outlet, { content } = {}) {
           <div class="q-item-chips">
             <span class="chip" style="--dc:${esc(r.d.color)}">${esc(r.d.label)}</span>
             ${r.isExam ? '<span class="rec-tag exam">正式口試</span>' : ''}
+            ${r.isSingleOral ? '<span class="rec-tag so">單題AI口語</span>' : ''}
+            ${r.isPractice && !r.isExam && !r.isSingleOral ? '<span class="rec-tag plain">一般單題</span>' : ''}
             ${r.hasScore ? `<span class="rec-tag score">${r.scoreTotal} 分・${esc(r.scoreLevel)}</span>` : ''}
             ${r.hasScore && r.aiSource ? `<span class="rec-tag aisrc">${esc(r.aiSource)}</span>` : ''}
             ${r.hasRec ? '<span class="rec-tag rec">🎙 有錄音</span>' : ''}
@@ -69,6 +83,8 @@ export function renderRecords(outlet, { content } = {}) {
           </div>
           <div class="q-item-title">${esc(r.q.title)}</div>
           <div class="rec-meta">練習 ${r.count} 次 · 會了 ${r.know} · 再練 ${r.review}</div>
+          ${r.soSummary ? `<div class="rec-tx">委員總評：${esc(r.soSummary)}</div>` : ''}
+          ${r.soFollowSummary ? `<div class="rec-tx">追問：${esc(r.soFollowSummary)}</div>` : ''}
           ${r.hasScore && r.missedSummary ? `<div class="rec-tx">缺少：${esc(r.missedSummary)}</div>` : ''}
           ${r.suggestionSummary ? `<div class="rec-tx">修正建議：${esc(r.suggestionSummary)}</div>` : ''}
           ${r.aiFollowUp ? `<div class="rec-tx">AI 追問：${esc(r.aiFollowUp)}</div>` : ''}
